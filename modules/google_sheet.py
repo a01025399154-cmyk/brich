@@ -63,6 +63,10 @@ def read_discount_sheet(sheet_url, credentials_path):
     
     # 데이터 타입 변환
     df['상품번호'] = pd.to_numeric(df['상품번호'], errors='coerce')
+    
+    # 내부할인: % 기호와 콤마 제거 후 숫자 변환
+    # '17%' → '17', '1,000' → '1000'
+    df['내부할인'] = df['내부할인'].astype(str).str.replace('%', '').str.replace(',', '').str.strip()
     df['내부할인'] = pd.to_numeric(df['내부할인'], errors='coerce')
     
     # 날짜 변환

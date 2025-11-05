@@ -49,9 +49,11 @@ def main():
         channel_mappings = beeflow.query_products(products_to_query)
         print(f"✓ 채널 매핑 완료\n")
 
-        # Step 3: 데이터 변환 및 확장
+        # Step 3: 데이터 변환 및 확장 (설정일이 없는 데이터만 처리)
         print("[3/4] 데이터 변환...")
-        df_output = process_promotion_data(df_input, channel_mappings)
+        df_to_process = df_input[df_input["설정일"].isna()].copy()
+        print(f"처리 대상: {len(df_to_process)}개 행")
+        df_output = process_promotion_data(df_to_process, channel_mappings)
         print(f"✓ {len(df_output)}개 행 생성\n")
 
         # Step 4: 채널별 엑셀 파일 생성

@@ -121,8 +121,9 @@ def create_output_row(input_row: pd.Series, channel_name: str, channel_product_i
     
     # 타입별 처리
     if discount_type == 'P':  # 퍼센트
-        # 0.17 → 17로 변환 (1보다 작으면 100을 곱함)
-        if discount_value < 1:
+        # 퍼센트는 그대로 사용 (구글시트에서 이미 17로 입력됨)
+        # 만약 0.17처럼 소수로 입력된 경우만 100 곱하기
+        if 0 < discount_value < 1:
             discount_value = discount_value * 100
     elif discount_type == 'W':  # 원화
         # 그대로 사용

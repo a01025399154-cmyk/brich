@@ -15,7 +15,7 @@ def process_promotion_data(df_input: pd.DataFrame, channel_mappings: Dict) -> pd
         channel_mappings: {상품번호: {채널명: 채널상품번호}}
     
     Returns:
-        product_promotion_upload 형식의 DataFrame
+        product_promotion_upload 형식의 DataFrame (시작일, 종료일, 채널명 포함)
     """
     output_rows = []
     
@@ -35,11 +35,14 @@ def process_promotion_data(df_input: pd.DataFrame, channel_mappings: Dict) -> pd
         
         # 각 채널별로 행 생성
         for channel_name, channel_product_id in target_channels.items():
-            output_row = create_output_row(row, channel_product_id)
+            output_row = create_output_row(row, channel_name, channel_product_id)
             output_rows.append(output_row)
     
     # DataFrame 생성
     df_output = pd.DataFrame(output_rows, columns=[
+        '시작일',
+        '종료일',
+        '채널명',
         '상품번호',
         '내부할인타입',
         '내부할인',
@@ -94,31 +97,52 @@ def parse_channel_info(channel_str: str, available_channels: Dict) -> Dict[str, 
     return result
 
 
-def create_output_row(input_row: pd.Series, channel_product_id: str) -> list:
+def create_output_row(input_row: pd.Series, channel_name: str, channel_product_id: str) -> list:
     """
     출력 행 생성
     
     Args:
         input_row: K~R열의 한 행
+        channel_name: 채널명
         channel_product_id: 채널별 상품번호
     
     Returns:
-        [상품번호, 내부할인타입, 내부할인, ...]
+        [시작일, 종료일, 채널명, 상품번호, 내부할인타입, 내부할인, ...]
     """
-    # 할인 계산
-    discount_type = input_row['내부할인타입']
-    discount_value = input_row['내부할인']
+    # 할인 정보 추출
+    discount_type = input_row.get('내부할인타입', '')
+    discount_value_raw = input_row.get('내부할인', 0)
+    
+    # NaN 체크 및 기본값 설정
+    if pd.isna(discount_value_raw):
+        discount_value = 0
+    else:
+        discount_value = float(discount_value_raw)
     
     # 타입별 처리
     if discount_type == 'P':  # 퍼센트
-        # 0.17 → 17로 변환
-        discount_value = float(discount_value) * 100 if discount_value < 1 else discount_value
+        # 0.17 → 17로 변환 (1보다 작으면 100을 곱함)
+        if discount_value < 1:
+            discount_value = discount_value * 100
     elif discount_type == 'W':  # 원화
         # 그대로 사용
-        discount_value = float(discount_value)
+        pass
+    elif discount_type == 'A':  # 절대값 (원화)
+        # 그대로 사용
+        pass
+    else:
+        # 알 수 없는 타입은 그대로 사용
+        pass
     
-    # 출력 행
+    # 날짜 정보
+    start_date = input_row.get('시작일')
+    end_date = input_row.get('종료일')
+    
+    # 출력 행 (시작일, 종료일, 채널명 포함)
     row = [
+        start_date,              # 시작일
+        end_date,                # 종료일
+        channel_name,            # 채널명
         channel_product_id,      # 상품번호
         discount_type,           # 내부할인타입
         discount_value,          # 내부할인
@@ -140,8 +164,8 @@ if __name__ == "__main__":
     
     # 샘플 입력 데이터
     df_test = pd.DataFrame({
-        '시작일': ['2025-11-01'],
-        '종료일': ['2025-12-05'],
+        '시작일': [pd.Timestamp('2025-11-01')],
+        '종료일': [pd.Timestamp('2025-12-05')],
         '상품번호': [986269048],
         '내부할인타입': ['P'],
         '내부할인': [0.17],

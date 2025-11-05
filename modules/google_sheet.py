@@ -43,28 +43,22 @@ def read_discount_sheet(sheet_url, credentials_path):
     spreadsheet = client.open_by_key(sheet_id)
     
     # gid로 특정 시트 탭 가져오기
-    # gid=737496399 -> [11월]내부 할인[삭제금지]
     try:
-        # URL에서 gid 추출
         if 'gid=' in sheet_url:
             gid = sheet_url.split('gid=')[1].split('&')[0].split('#')[0]
             worksheet = spreadsheet.get_worksheet_by_id(int(gid))
         else:
-            # gid가 없으면 첫 번째 시트
             worksheet = spreadsheet.get_worksheet(0)
     except:
-        # 시트명으로 직접 찾기
         worksheet = spreadsheet.worksheet('[11월]내부 할인[삭제금지]')
     
-    # K~R열 데이터 가져오기 (K=11, R=18)
-    # 3행부터 읽기 (1행: 대분류, 2행: 설명, 3행: 필드명)
-    data = worksheet.get('K4:R')  # 4행부터 끝까지
+    # K~R열 데이터 가져오기 (4행부터 끝까지)
+    data = worksheet.get('K4:R')
     
     # DataFrame 생성
     df = pd.DataFrame(data, columns=list(COLUMN_MAPPING.values()))
     
     # 데이터 전처리
-    # 빈 행 제거
     df = df[df['상품번호'].notna() & (df['상품번호'] != '')]
     
     # 데이터 타입 변환
@@ -80,16 +74,3 @@ def read_discount_sheet(sheet_url, credentials_path):
     df = df[df['상품번호'].notna()]
     
     return df
-
-
-if __name__ == "__main__":
-    # 테스트
-    df = read_discount_sheet(
-        "https://docs.google.com/spreadsheets/d/1Ca-AXLDXIpyb_N_9AvI_2fT5g-jMEDYlv233mbkRdVs/edit",
-        "/mnt/user-data/uploads/inner-sale-979c1e8ed412.json"
-    )
-    print(f"읽은 행 수: {len(df)}")
-    print("\n첫 5행:")
-    print(df.head())
-    print("\n컬럼 정보:")
-    print(df.dtypes)

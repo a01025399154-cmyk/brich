@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 프로모션 자동화 메인 스크립트
-구글 시트 K~R열 읽기 → 비플로우 조회 (내부 API) → product_promotion_upload.xlsx 생성
+구글 시트 K~R열 읽기 → 비플로우 조회 (내부 API) → 채널별 엑셀 파일 생성
 """
 
 import os
@@ -11,13 +11,13 @@ from datetime import datetime
 from modules.google_sheet import read_discount_sheet
 from modules.bflow import BeeflowClient
 from modules.data_processor import process_promotion_data
-from modules.excel_generator import generate_upload_file
+from modules.excel_generator import generate_upload_files
 
 # 설정
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ca-AXLDXIpyb_N_9AvI_2fT5g-jMEDYlv233mbkRdVs/edit?gid=737496399#gid=737496399"
 GOOGLE_CREDENTIALS_PATH = "inner-sale-979c1e8ed412.json"
 
-# 🔹 비플로우 내부 API 베이스 URL (로그인/셀레니움 사용 안 함)
+# 비플로우 내부 API 베이스 URL
 BEEFLOW_API_BASE_URL = "http://192.168.0.10:10645"
 
 OUTPUT_DIR = "outputs"
@@ -54,17 +54,23 @@ def main():
         df_output = process_promotion_data(df_input, channel_mappings)
         print(f"✓ {len(df_output)}개 행 생성\n")
 
-        # Step 4: 엑셀 파일 생성
-        print("[4/4] 엑셀 파일 생성...")
-        output_file = generate_upload_file(df_output, OUTPUT_DIR)
-        print(f"✓ 파일 생성 완료: {output_file}\n")
+        # Step 4: 채널별 엑셀 파일 생성
+        print("[4/4] 채널별 엑셀 파일 생성...")
+        output_files = generate_upload_files(df_output, OUTPUT_DIR)
+        print(f"✓ {len(output_files)}개 파일 생성 완료\n")
 
         print("=" * 60)
         print("✅ 작업 완료")
         print("=" * 60)
-        print(f"출력 파일: {output_file}")
+        print(f"출력 디렉토리: {OUTPUT_DIR}")
+        print(f"생성된 파일 수: {len(output_files)}")
         print(f"총 행 수: {len(df_output)}")
         print(f"종료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        print("\n생성된 파일 목록:")
+        for file_path in output_files:
+            filename = os.path.basename(file_path)
+            print(f"  - {filename}")
 
     except Exception as e:
         print("\n" + "=" * 60)

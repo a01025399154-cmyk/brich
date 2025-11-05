@@ -33,9 +33,9 @@ def process_promotion_data(df_input: pd.DataFrame, channel_mappings: Dict) -> pd
         # 채널 정보 파싱
         target_channels = parse_channel_info(channel_info, product_channels)
         
-        # 각 채널별로 행 생성
+        # 각 채널별로 행 생성 (비플로우 상품번호 전달)
         for channel_name, channel_product_id in target_channels.items():
-            output_row = create_output_row(row, channel_name, channel_product_id)
+            output_row = create_output_row(row, channel_name, product_id)  # product_id를 전달
             output_rows.append(output_row)
     
     # DataFrame 생성
@@ -97,14 +97,14 @@ def parse_channel_info(channel_str: str, available_channels: Dict) -> Dict[str, 
     return result
 
 
-def create_output_row(input_row: pd.Series, channel_name: str, channel_product_id: str) -> list:
+def create_output_row(input_row: pd.Series, channel_name: str, beeflow_product_id: int) -> list:
     """
     출력 행 생성
     
     Args:
         input_row: K~R열의 한 행
         channel_name: 채널명
-        channel_product_id: 채널별 상품번호
+        beeflow_product_id: 비플로우 상품번호 (예: 412533475)
     
     Returns:
         [시작일, 종료일, 채널명, 상품번호, 내부할인타입, 내부할인, ...]
@@ -144,16 +144,16 @@ def create_output_row(input_row: pd.Series, channel_name: str, channel_product_i
         start_date,              # 시작일
         end_date,                # 종료일
         channel_name,            # 채널명
-        channel_product_id,      # 상품번호
+        beeflow_product_id,      # 상품번호 (비플로우 상품번호)
         discount_type,           # 내부할인타입
         discount_value,          # 내부할인
-        '',                      # 연동할인타입 (선택)
-        '',                      # 연동할인 (선택)
-        '',                      # 외부할인타입 (선택)
-        '',                      # 외부할인가 (선택)
-        '',                      # 채널분담율 (선택)
-        '',                      # 브리치분담율 (선택)
-        ''                       # 입점사분담율 (선택)
+        discount_type,           # 연동할인타입 (내부할인타입과 동일)
+        0,                       # 연동할인 (0 고정)
+        discount_type,           # 외부할인타입 (내부할인타입과 동일)
+        0,                       # 외부할인가 (0 고정)
+        0,                       # 채널분담율 (0 고정)
+        0,                       # 브리치분담율 (0 고정)
+        100                      # 입점사분담율 (100 고정)
     ]
     
     return row

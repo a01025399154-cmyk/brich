@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 프로모션 자동화 메인 스크립트
-구글 시트 K~R열 읽기 → 비플로우 조회 → product_promotion_upload.xlsx 생성
+구글 시트 K~R열 읽기 → 비플로우 조회 (Selenium) → product_promotion_upload.xlsx 생성
 """
 
 import os
@@ -14,16 +14,18 @@ from modules.excel_generator import generate_upload_file
 
 # 설정
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ca-AXLDXIpyb_N_9AvI_2fT5g-jMEDYlv233mbkRdVs/edit?gid=737496399#gid=737496399"
-GOOGLE_CREDENTIALS_PATH = "/Users/brich/Desktop/brich/inner-sale-979c1e8ed412.json"
+GOOGLE_CREDENTIALS_PATH = "inner-sale-979c1e8ed412.json"
 BEEFLOW_ID = "a01025399154@brich.co.kr"
 BEEFLOW_PW = "2rlqmadl@!"
-OUTPUT_DIR = "/mnt/user-data/outputs"
+OUTPUT_DIR = "outputs"
 
 def main():
     print("=" * 60)
     print("프로모션 자동화 시작")
     print("=" * 60)
     print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    
+    beeflow = None
     
     try:
         # Step 1: 구글 시트 읽기 (K~R열)
@@ -32,7 +34,7 @@ def main():
         print(f"✓ {len(df_input)}개 행 읽음\n")
         
         # Step 2: 비플로우 채널 정보 조회
-        print("[2/4] 비플로우 상품 조회...")
+        print("[2/4] 비플로우 상품 조회 (Selenium)...")
         beeflow = BeeflowClient(BEEFLOW_ID, BEEFLOW_PW)
         
         # 처리 필요한 상품 추출 (설정일이 없는 것)
@@ -68,6 +70,11 @@ def main():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+    
+    finally:
+        # 브라우저 종료
+        if beeflow:
+            beeflow.close()
 
 if __name__ == "__main__":
     main()

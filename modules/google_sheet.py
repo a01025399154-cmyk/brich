@@ -41,7 +41,20 @@ def read_discount_sheet(sheet_url, credentials_path):
     # 시트 열기
     sheet_id = sheet_url.split('/d/')[1].split('/')[0]
     spreadsheet = client.open_by_key(sheet_id)
-    worksheet = spreadsheet.get_worksheet(0)  # 첫 번째 시트
+    
+    # gid로 특정 시트 탭 가져오기
+    # gid=737496399 -> [11월]내부 할인[삭제금지]
+    try:
+        # URL에서 gid 추출
+        if 'gid=' in sheet_url:
+            gid = sheet_url.split('gid=')[1].split('&')[0].split('#')[0]
+            worksheet = spreadsheet.get_worksheet_by_id(int(gid))
+        else:
+            # gid가 없으면 첫 번째 시트
+            worksheet = spreadsheet.get_worksheet(0)
+    except:
+        # 시트명으로 직접 찾기
+        worksheet = spreadsheet.worksheet('[11월]내부 할인[삭제금지]')
     
     # K~R열 데이터 가져오기 (K=11, R=18)
     # 3행부터 읽기 (1행: 대분류, 2행: 설명, 3행: 필드명)

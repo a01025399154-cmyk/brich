@@ -1,11 +1,13 @@
 """
 비플로우 웹사이트 자동 업로드 모듈
-Selenium을 사용하여 연동쇼핑몰 프로모션 관리에 엑셀 파일 업로드
+Selenium을 사용하여 프로모션 관리에 엑셀 파일 업로드
+상품 프로모션과 브랜드 프로모션 지원
 """
 
 import os
 import time
 from datetime import datetime
+from typing import List
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -13,6 +15,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 class BeeflowUploader:
+    """비플로우 프로모션 업로더"""
+    
     def __init__(self, email: str, password: str):
         self.email = email
         self.password = password
@@ -217,13 +221,17 @@ class BeeflowUploader:
                 "쿠팡": "coupang",
                 "위메프": "wemakeprice",
                 "GS샵": "gsshop",
+                "GS Shop": "gsshop",
                 "롯데ON": "lotte",
                 "CJ몰": "cjmall",
                 "하프클럽(신규)": "newhalfclub",
-                "롯데아이몰": "lotteimall",
+                "Halfclub": "newhalfclub",
+                "롯데i몰": "lotteimall",
                 "카카오쇼핑하기": "kakaotalkshopping",
                 "카카오스타일": "kakaostyle",
-                "H몰": "hmall"
+                "H몰": "hmall",
+                "홈앤쇼핑": "hnsmall",
+                "퀸잇": "queenit"
             }
             
             api_channel_name = channel_mapping.get(channel_name, channel_name.lower())
@@ -268,14 +276,25 @@ class BeeflowUploader:
             print(f"    ✗ 채널 선택 실패: {e}")
             return False
             
-    def upload_promotion(self, file_path: str, channel_name: str, start_date: datetime, end_date: datetime):
-        """프로모션 업로드"""
+    def upload_promotion(self, file_path: str, channel_name: str, start_date: datetime, 
+                        end_date: datetime, promotion_type: str = "product"):
+        """
+        프로모션 업로드
+        
+        Args:
+            file_path: 엑셀 파일 경로
+            channel_name: 채널명
+            start_date: 시작일
+            end_date: 종료일
+            promotion_type: "product" 또는 "brand"
+        """
         filename = os.path.basename(file_path)
         promotion_name = filename.replace('.xlsx', '').replace('_', ' ')
         
         print(f"\n  [업로드] {filename}")
         print(f"    채널: {channel_name}")
         print(f"    기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+        print(f"    타입: {promotion_type}")
         
         try:
             # 페이지 접속
@@ -305,37 +324,8 @@ class BeeflowUploader:
             # 채널 선택
             self.select_channel_from_multiselect(channel_name)
             
-            # 상품 체크박스 클릭
-            checkboxes = []
-            try:
-                checkboxes = self.driver.find_elements(By.XPATH, "//label[contains(text(), '상품')]/ancestor::div[contains(@class, 'pretty')]//input[@type='checkbox']")
-            except:
-                pass
-            
-            if not checkboxes:
-                try:
-                    pretty_divs = self.driver.find_elements(By.CSS_SELECTOR, ".pretty")
-                    for div in pretty_divs:
-                        label = div.find_element(By.TAG_NAME, "label")
-                        if "상품" in label.get_attribute('textContent'):
-                            checkbox = div.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
-                            checkboxes = [checkbox]
-                            break
-                except:
-                    pass
-            
-            if checkboxes:
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", checkboxes[0])
-                time.sleep(0.3)
-                
-                if not checkboxes[0].is_selected():
-                    try:
-                        self.driver.execute_script("arguments[0].click();", checkboxes[0])
-                    except:
-                        parent_div = checkboxes[0].find_element(By.XPATH, "..")
-                        self.driver.execute_script("arguments[0].click();", parent_div)
-                    time.sleep(2)
-                    print("    ✓ 상품 체크박스 선택")
+            # 체크박스 클릭 (상품 또는 브랜드)
+            self._click_checkbox(promotion_type)
             
             # 엑셀 업로드 버튼 클릭
             upload_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), '엑셀 업로드')]")
@@ -348,24 +338,7 @@ class BeeflowUploader:
                     break
             
             # 파일 업로드
-            if not os.path.isabs(file_path):
-                possible_paths = [
-                    os.path.abspath(file_path),
-                    os.path.abspath(os.path.join("..", file_path)),
-                    os.path.abspath(os.path.join(".", file_path.replace("outputs/", "")))
-                ]
-                
-                for test_path in possible_paths:
-                    if os.path.exists(test_path):
-                        abs_file_path = test_path
-                        break
-                else:
-                    raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
-            else:
-                abs_file_path = file_path
-                
-            if not os.path.exists(abs_file_path):
-                raise FileNotFoundError(f"파일이 존재하지 않습니다: {abs_file_path}")
+            abs_file_path = self._get_absolute_path(file_path)
             
             file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
             if file_inputs:
@@ -421,6 +394,64 @@ class BeeflowUploader:
             except:
                 pass
             raise
+    
+    def _click_checkbox(self, promotion_type: str):
+        """체크박스 클릭 (상품 또는 브랜드)"""
+        checkbox_label = "상품" if promotion_type == "product" else "브랜드"
+        
+        checkboxes = []
+        try:
+            checkboxes = self.driver.find_elements(
+                By.XPATH, 
+                f"//label[contains(text(), '{checkbox_label}')]/ancestor::div[contains(@class, 'pretty')]//input[@type='checkbox']"
+            )
+        except:
+            pass
+        
+        if not checkboxes:
+            try:
+                pretty_divs = self.driver.find_elements(By.CSS_SELECTOR, ".pretty")
+                for div in pretty_divs:
+                    label = div.find_element(By.TAG_NAME, "label")
+                    if checkbox_label in label.get_attribute('textContent'):
+                        checkbox = div.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
+                        checkboxes = [checkbox]
+                        break
+            except:
+                pass
+        
+        if checkboxes:
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", checkboxes[0])
+            time.sleep(0.3)
+            
+            if not checkboxes[0].is_selected():
+                try:
+                    self.driver.execute_script("arguments[0].click();", checkboxes[0])
+                except:
+                    parent_div = checkboxes[0].find_element(By.XPATH, "..")
+                    self.driver.execute_script("arguments[0].click();", parent_div)
+                time.sleep(2)
+                print(f"    ✓ {checkbox_label} 체크박스 선택")
+    
+    def _get_absolute_path(self, file_path: str) -> str:
+        """절대 경로 가져오기"""
+        if not os.path.isabs(file_path):
+            possible_paths = [
+                os.path.abspath(file_path),
+                os.path.abspath(os.path.join("..", file_path)),
+                os.path.abspath(os.path.join(".", file_path.replace("outputs/", "")))
+            ]
+            
+            for test_path in possible_paths:
+                if os.path.exists(test_path):
+                    return test_path
+            
+            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"파일이 존재하지 않습니다: {file_path}")
+        
+        return file_path
             
     def close(self):
         """드라이버 종료"""
@@ -428,10 +459,20 @@ class BeeflowUploader:
             self.driver.quit()
 
 
-def upload_promotions_to_beeflow(output_files: list, output_dir: str, email: str, password: str):
-    """생성된 엑셀 파일들을 비플로우에 자동 업로드"""
+def upload_promotions(output_files: List[str], output_dir: str, email: str, 
+                     password: str, promotion_type: str = "product"):
+    """
+    생성된 엑셀 파일들을 비플로우에 자동 업로드
+    
+    Args:
+        output_files: 업로드할 파일 경로 리스트
+        output_dir: 출력 디렉토리
+        email: 비플로우 이메일
+        password: 비플로우 비밀번호
+        promotion_type: "product" 또는 "brand"
+    """
     print("\n" + "=" * 60)
-    print("비플로우 자동 업로드 시작")
+    print(f"비플로우 자동 업로드 시작 ({promotion_type})")
     print("=" * 60)
     
     uploader = BeeflowUploader(email, password)
@@ -454,7 +495,7 @@ def upload_promotions_to_beeflow(output_files: list, output_dir: str, email: str
                     start_date = datetime.strptime('20' + dates[0], '%Y%m%d')
                     end_date = datetime.strptime('20' + dates[1], '%Y%m%d')
                     
-                    uploader.upload_promotion(file_path, channel_name, start_date, end_date)
+                    uploader.upload_promotion(file_path, channel_name, start_date, end_date, promotion_type)
                     success_count += 1
                     
             except Exception as e:
@@ -468,32 +509,3 @@ def upload_promotions_to_beeflow(output_files: list, output_dir: str, email: str
     finally:
         time.sleep(2)
         uploader.close()
-
-
-if __name__ == "__main__":
-    # 테스트용 코드
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    if os.path.exists(os.path.join(script_dir, "..", "outputs")):
-        outputs_dir = os.path.join(script_dir, "..", "outputs")
-    elif os.path.exists(os.path.join(script_dir, "outputs")):
-        outputs_dir = os.path.join(script_dir, "outputs")
-    else:
-        outputs_dir = "outputs"
-    
-    test_file = os.path.join(outputs_dir, "251105-251205_상품_SSG_22.xlsx")
-    test_file = os.path.abspath(test_file)
-    
-    if not os.path.exists(test_file):
-        print("오류: 테스트 파일을 찾을 수 없습니다.")
-        import sys
-        sys.exit(1)
-    
-    test_files = [test_file]
-    
-    upload_promotions_to_beeflow(
-        output_files=test_files,
-        output_dir=outputs_dir,
-        email="jsj@brich.co.kr",
-        password="young124@"
-    )

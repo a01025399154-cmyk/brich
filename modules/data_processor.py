@@ -68,10 +68,10 @@ def process_promotion_data(df_input: pd.DataFrame, channel_mappings: Dict) -> pd
 
 def parse_channel_info(channel_str: str, available_channels: Dict) -> Dict[str, str]:
     """
-    채널 정보 파싱
+    채널 정보 파싱 (드롭다운 값 기반)
     
     Args:
-        channel_str: P열 값 ("*전 채널", "SSG", "쿠팡,11번가" 등)
+        channel_str: P열 드롭다운 값
         available_channels: 해당 상품이 등록된 채널 {채널명: 채널상품번호}
     
     Returns:
@@ -84,23 +84,62 @@ def parse_channel_info(channel_str: str, available_channels: Dict) -> Dict[str, 
     
     channel_str = str(channel_str).strip()
     
-    if channel_str == "*전 채널":
-        # 모든 등록된 채널
+    # 드롭다운 값 → 채널 리스트 매핑
+    DROPDOWN_MAPPING = {
+        "*전 채널": "ALL",
+        "지마켓/옥션": ["지마켓", "옥션"],
+        "11번가": ["11번가"],
+        "쿠팡": ["쿠팡"],
+        "SSG": ["SSG"],
+        "GS샵": ["GS Shop"],
+        "롯데온": ["롯데ON"],
+        "CJ몰": ["CJ몰"],
+        "하프클럽": ["Halfclub"],
+        "롯데i몰": ["롯데i몰"],
+        "카카오스타일": ["카카오스타일"],
+        "퀸잇": ["퀸잇"],
+        "홈앤쇼핑": ["홈앤쇼핑"],
+        "*전 채널 (gs제외)": "ALL_EXCEPT_GS",
+        "*전 채널 (퀸잇제외)": "ALL_EXCEPT_QUEENIT"
+    }
+    
+    # 1. 매핑 테이블에서 찾기
+    if channel_str not in DROPDOWN_MAPPING:
+        print(f"    ⚠️  알 수 없는 드롭다운 값: '{channel_str}'")
+        return result
+    
+    mapping_value = DROPDOWN_MAPPING[channel_str]
+    
+    # 2. 전체 채널
+    if mapping_value == "ALL":
+        return available_channels.copy()
+    
+    # 3. GS 제외
+    if mapping_value == "ALL_EXCEPT_GS":
         result = available_channels.copy()
-    else:
-        # 특정 채널(들)
-        requested_channels = [ch.strip() for ch in channel_str.split(',')]
+        return {k: v for k, v in result.items() 
+                if 'gs shop' not in k.lower() and 'gsshop' not in k.lower()}
+    
+    # 4. 퀸잇 제외
+    if mapping_value == "ALL_EXCEPT_QUEENIT":
+        result = available_channels.copy()
+        return {k: v for k, v in result.items() 
+                if '퀸잇' not in k and 'queenit' not in k.lower()}
+    
+    # 5. 특정 채널(들)
+    target_channels = mapping_value  # 리스트
+    
+    for target in target_channels:
+        target_normalized = target.lower().replace(' ', '')
         
-        for req_ch in requested_channels:
-            # 채널명 매칭 (대소문자 무시, 공백 제거)
-            req_ch_normalized = req_ch.lower().replace(' ', '')
+        for avail_ch, ch_id in available_channels.items():
+            avail_normalized = avail_ch.lower().replace(' ', '')
             
-            for avail_ch, ch_id in available_channels.items():
-                avail_ch_normalized = avail_ch.lower().replace(' ', '')
-                
-                if req_ch_normalized in avail_ch_normalized or avail_ch_normalized in req_ch_normalized:
-                    result[avail_ch] = ch_id
-                    break
+            if target_normalized == avail_normalized or \
+               target_normalized in avail_normalized or \
+               avail_normalized in target_normalized:
+                result[avail_ch] = ch_id
+                break
     
     return result
 

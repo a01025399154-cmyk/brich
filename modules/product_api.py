@@ -1,5 +1,6 @@
 """
-비플로우 상품 조회 모듈 (API 전용 버전)
+상품 채널 조회 API 모듈
+비플로우 내부 API를 사용하여 상품별 채널 정보 조회
 """
 
 import time
@@ -7,12 +8,13 @@ from typing import Dict, List, Optional
 import requests
 
 
-class BeeflowClient:
+class ProductAPIClient:
+    """상품 채널 정보 조회 클라이언트"""
+    
     def __init__(self, api_base_url: str, timeout: int = 5):
         """
         Args:
-            api_base_url: 내부 API 베이스 URL
-                예) "http://192.168.0.10:10645"
+            api_base_url: 내부 API 베이스 URL (예: "http://192.168.0.10:10645")
             timeout: API 요청 타임아웃 (초)
         """
         if not api_base_url:
@@ -24,7 +26,7 @@ class BeeflowClient:
 
     def query_products(self, product_ids: List[int]) -> Dict[int, Dict[str, str]]:
         """
-        여러 상품(BRICH 상품번호)에 대해 채널별 상품번호 조회
+        여러 상품에 대해 채널별 상품번호 조회
 
         Args:
             product_ids: BRICH 상품번호 리스트
@@ -32,8 +34,7 @@ class BeeflowClient:
         Returns:
             {
                 상품번호: {
-                    "지마켓(상품번호)": "채널상품번호",
-                    "옥션(상품번호)": "채널상품번호",
+                    "채널명": "채널상품번호",
                     ...
                 }
             }
@@ -45,7 +46,7 @@ class BeeflowClient:
             print(f"  [API] [{idx}/{total}] 상품 {product_id} 조회 중...")
 
             try:
-                mapping = self._query_single_product_api(product_id)
+                mapping = self._query_single_product(product_id)
                 results[product_id] = mapping
 
                 if mapping:
@@ -61,7 +62,7 @@ class BeeflowClient:
 
         return results
 
-    def _query_single_product_api(self, product_id: int) -> Dict[str, str]:
+    def _query_single_product(self, product_id: int) -> Dict[str, str]:
         """
         내부 API를 사용한 단일 상품 조회
 
@@ -69,7 +70,7 @@ class BeeflowClient:
             product_id: BRICH 상품번호
 
         Returns:
-            {채널명(엑셀용): 채널상품번호}
+            {채널명: 채널상품번호}
         """
         url = f"{self.api_base_url}/api/v1/product/{product_id}/channel-product-id"
 
@@ -102,21 +103,21 @@ class BeeflowClient:
             if not ch_id or ch_id in ["-", "None", "null", "없음"]:
                 continue
 
-            normalized = self._normalize_channel_api_key(api_key)
+            normalized = self._normalize_channel_key(api_key)
             if normalized:
                 mapping[normalized] = ch_id
 
         return mapping
 
-    def _normalize_channel_api_key(self, key: str) -> Optional[str]:
+    def _normalize_channel_key(self, key: str) -> Optional[str]:
         """
-        API의 channelProductIds 키 → discount.xlsx용 채널명으로 매핑
+        API 채널 키 → 한글 채널명 변환
 
         Args:
-            key: 예) "ssg", "gmarket", "auction", "kakaotalkshopping" ...
+            key: API 채널 키 (예: "ssg", "gmarket", "coupang")
 
         Returns:
-            엑셀 컬럼명 (CSV의 name 컬럼 값 그대로 사용)
+            한글 채널명
         """
         if not key:
             return None
@@ -164,3 +165,17 @@ class BeeflowClient:
         }
 
         return mapping.get(k)
+
+
+if __name__ == "__main__":
+    # 테스트
+    client = ProductAPIClient("http://192.168.0.10:10645")
+    
+    test_products = [986269048]
+    results = client.query_products(test_products)
+    
+    print("\n=== 조회 결과 ===")
+    for product_id, channels in results.items():
+        print(f"상품 {product_id}:")
+        for ch_name, ch_id in channels.items():
+            print(f"  - {ch_name}: {ch_id}")

@@ -116,7 +116,7 @@ class BeeflowClient:
             key: 예) "ssg", "gmarket", "auction", "kakaotalkshopping" ...
 
         Returns:
-            엑셀 컬럼명 (예: "지마켓(상품번호)")
+            엑셀 컬럼명 (CSV의 name 컬럼 값 그대로 사용)
         """
         if not key:
             return None
@@ -124,38 +124,43 @@ class BeeflowClient:
         k = key.strip().lower()
 
         mapping = {
-            "ssg": "SSG",
-            "gmarket": "지마켓(상품번호)",
-            "auction": "옥션(상품번호)",
             "11st": "11번가",
-            "coupang": "쿠팡",
-            "wemakeprice": "위메프",
-            "gsshop": "GS샵",
-            "cjmall": "CJ몰",
-            "lotte": "롯데ON",
-            "lotteimall": "롯데아이몰",
-            "newhalfclub": "하프클럽(신규)",
-            "halfclub": "하프클럽(신규)",
-            "naversmartstore": "네이버스마트스토어",
-            "globalgmarket": "글로벌 지마켓",
-            "globalauction": "글로벌 옥션",
-            "cafe24": "카페24",
-            "hwahae": "화해",
-            "musinsa": "무신사",
+            "akmall": "AK몰",
             "aliexpress": "알리익스프레스",
-            "qoo10": "큐텐",
-            "shein": "쉬인",
-            "kakaogift": "카카오 선물하기",
-            "kakaotalkshopping": "카카오쇼핑하기",
-            "kakaostyle": "카카오스타일",
+            "auction": "옥션",
+            "cafe24": "카페24",
+            "cjmall": "CJ몰",
+            "coupang": "쿠팡",
+            "g9": "G9",
+            "globalauction": "옥션 글로벌",
+            "globalgmarket": "지마켓 글로벌",
             "globalnaversmartstore": "글로벌 네이버스마트스토어",
-            "sabangenet": "사방넷",
-            "hnsmall": "H몰",
+            "gmarket": "지마켓",
+            "gsshop": "GS Shop",
+            "halfclub": "(구)하프클럽",
+            "hmall": "H몰",
+            "hnsmall": "홈앤쇼핑",
+            "hwahae": "화해",
+            "interpark": "인터파크",
+            "kakaostyle": "카카오스타일",
+            "kakaotalkgift": "카카오 선물하기",
+            "kakaotalkshopping": "카카오 쇼핑하기",
+            "kakaotalkstore": "카카오톡 스토어",
+            "lotte": "롯데ON",
+            "lotteimall": "롯데i몰",
+            "musinsa": "무신사",
             "naverplusstore": "네이버플러스스토어",
+            "naversmartstore": "네이버스마트스토어",
+            "newhalfclub": "Halfclub",
+            "qoo10": "큐텐",
             "queenit": "퀸잇",
-            "homeandshopping": "홈앤쇼핑",
-            "rocketgross": "로켓그로스",
+            "rocketgrowth": "로켓그로스",
+            "sabangnet": "사방넷",
+            "shein": "쉬인",
+            "ssg": "SSG",
             "temu": "테무",
+            "tmon": "티몬",
+            "wemakeprice": "위메프",
         }
 
         return mapping.get(k)

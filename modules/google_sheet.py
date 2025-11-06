@@ -196,7 +196,41 @@ def read_discount_sheet(sheet_url, credentials_path, sheet_name=None, interactiv
     
     # 데이터 타입 변환
     df['상품번호'] = pd.to_numeric(df['상품번호'], errors='coerce')
-    df['내부할인'] = pd.to_numeric(df['내부할인'], errors='coerce')
+    
+    # 내부할인 값 처리 - "15%", "1000원", "0.15", "15" 등 다양한 형식 지원
+    def parse_discount_value(val):
+        """내부할인 값을 숫자로 변환"""
+        if pd.isna(val):
+            return 0.0
+        
+        # 이미 숫자면 그대로 반환
+        if isinstance(val, (int, float)):
+            return float(val)
+        
+        # 문자열 처리
+        val_str = str(val).strip()
+        
+        # 빈 문자열
+        if not val_str or val_str == '':
+            return 0.0
+        
+        # "15%", "0.15%" 형식 - % 제거
+        if '%' in val_str:
+            val_str = val_str.replace('%', '').strip()
+        
+        # "1000원", "1,000원" 형식 - 원 제거
+        if '원' in val_str:
+            val_str = val_str.replace('원', '').strip()
+        
+        # 쉼표 제거 (예: "1,000" -> "1000")
+        val_str = val_str.replace(',', '')
+        
+        try:
+            return float(val_str)
+        except:
+            return 0.0
+    
+    df['내부할인'] = df['내부할인'].apply(parse_discount_value)
     
     # 날짜 변환 전에 빈 값 정리 (핵심 수정 부분)
     # 이미 위에서 빈 문자열은 NaN으로 변환했으므로 clean_date_value 불필요

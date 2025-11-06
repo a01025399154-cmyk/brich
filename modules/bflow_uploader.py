@@ -32,31 +32,27 @@ class BeeflowUploader:
         
     def login(self):
         """비플로우 로그인"""
-        print("  [로그인] 비플로우 접속 중...")
+        print("  [로그인] 시작...")
         self.driver.get("https://b-flow.co.kr")
         time.sleep(2)
         
         try:
-            print("  [로그인] 로그인 버튼 클릭...")
             login_btn = self.wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '로그인')]"))
             )
             self.driver.execute_script("arguments[0].click();", login_btn)
             time.sleep(1.5)
             
-            print("  [로그인] 이메일 입력...")
             email_input = self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email']"))
             )
             email_input.send_keys(self.email)
             time.sleep(0.5)
             
-            print("  [로그인] 비밀번호 입력...")
             password_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
             password_input.send_keys(self.password)
             time.sleep(0.5)
             
-            print("  [로그인] 제출...")
             submit_btn = self.driver.find_element(By.CSS_SELECTOR, ".modal .login-btn, .v--modal .login-btn")
             self.driver.execute_script("arguments[0].click();", submit_btn)
             
@@ -69,17 +65,11 @@ class BeeflowUploader:
             raise
     
     def select_date_in_calendar(self, target_date: datetime, is_end_time: bool = False):
-        """
-        vdatetime 캘린더에서 날짜 + 시간 선택
-        
-        Args:
-            target_date: 목표 날짜
-            is_end_time: True면 23:59, False면 00:00
-        """
+        """vdatetime 캘린더에서 날짜 + 시간 선택"""
         try:
             time.sleep(1)
             
-            # 1. 연도 확인 - 다를 때만 클릭!
+            # 1. 연도 확인
             try:
                 year_div = self.driver.find_element(By.CSS_SELECTOR, ".vdatetime-popup__year")
                 current_year_text = year_div.text.strip()
@@ -88,7 +78,6 @@ class BeeflowUploader:
                     current_year = int(current_year_text)
                     
                     if current_year != target_date.year:
-                        print(f"      연도 변경: {current_year} → {target_date.year}")
                         self.driver.execute_script("arguments[0].click();", year_div)
                         time.sleep(0.8)
                         
@@ -100,12 +89,10 @@ class BeeflowUploader:
                                 self.driver.execute_script("arguments[0].click();", item)
                                 time.sleep(1)
                                 break
-                    else:
-                        print(f"      연도 일치: {current_year}")
             except Exception as e:
-                print(f"      연도 확인 오류: {e}")
+                pass
             
-            # 2. 월 선택 - 화살표로만 이동
+            # 2. 월 선택
             try:
                 max_attempts = 24
                 for attempt in range(max_attempts):
@@ -114,7 +101,6 @@ class BeeflowUploader:
                         month_text = month_selector.text.strip()
                         
                         if not month_text:
-                            print(f"      월 로딩 중... ({attempt+1}/{max_attempts})")
                             time.sleep(0.5)
                             continue
                         
@@ -123,7 +109,6 @@ class BeeflowUploader:
                         current_year_in_month = int(parts[1].strip())
                         
                         if current_year_in_month == target_date.year and current_month == target_date.month:
-                            print(f"      월 일치!")
                             break
                         
                         if current_year_in_month < target_date.year:
@@ -143,12 +128,11 @@ class BeeflowUploader:
                         time.sleep(0.4)
                         
                     except Exception as e:
-                        print(f"      월 이동 오류: {e}")
                         time.sleep(0.5)
                         continue
                         
             except Exception as e:
-                print(f"      월 선택 실패: {e}")
+                pass
             
             # 3. 일 선택
             try:
@@ -157,34 +141,27 @@ class BeeflowUploader:
                 
                 for item in date_items:
                     if item.text.strip() == str(target_date.day):
-                        print(f"      일 선택: {target_date.day}")
                         self.driver.execute_script("arguments[0].click();", item)
                         time.sleep(0.5)
                         break
             except Exception as e:
-                print(f"      일 선택 실패: {e}")
+                pass
             
             # 4. OK 버튼 클릭 (날짜 확인)
             try:
                 ok_btn = self.driver.find_element(By.XPATH, "//div[@class='vdatetime-popup__actions__button' and text()='Ok']")
                 self.driver.execute_script("arguments[0].click();", ok_btn)
                 time.sleep(1)
-                print(f"      날짜 OK 클릭")
             except Exception as e:
-                print(f"      날짜 OK 버튼 클릭 실패: {e}")
+                pass
             
-            # 5. 시간 선택 (시:분)
+            # 5. 시간 선택
             try:
-                print(f"      시간 선택 중... ({'23:59' if is_end_time else '00:00'})")
-                
-                # 시간 선택 화면 대기
                 time.sleep(1)
-                
-                # 시간 리스트 찾기
                 time_pickers = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime-popup__list-picker")
                 
                 if len(time_pickers) >= 2:
-                    # 시(hour) 선택
+                    # 시(hour)
                     hour_picker = time_pickers[0]
                     target_hour = "23" if is_end_time else "00"
                     
@@ -194,12 +171,11 @@ class BeeflowUploader:
                             self.driver.execute_script("arguments[0].scrollIntoView(true);", item)
                             time.sleep(0.2)
                             self.driver.execute_script("arguments[0].click();", item)
-                            print(f"        시: {target_hour}")
                             break
                     
                     time.sleep(0.3)
                     
-                    # 분(minute) 선택
+                    # 분(minute)
                     minute_picker = time_pickers[1]
                     target_minute = "59" if is_end_time else "00"
                     
@@ -209,25 +185,88 @@ class BeeflowUploader:
                             self.driver.execute_script("arguments[0].scrollIntoView(true);", item)
                             time.sleep(0.2)
                             self.driver.execute_script("arguments[0].click();", item)
-                            print(f"        분: {target_minute}")
                             break
                     
                     time.sleep(0.3)
                     
             except Exception as e:
-                print(f"      시간 선택 실패: {e}")
+                pass
             
-            # 6. OK 버튼 클릭 (시간 확인 및 캘린더 닫기)
+            # 6. OK 버튼 클릭 (캘린더 닫기)
             try:
                 ok_btn = self.driver.find_element(By.XPATH, "//div[@class='vdatetime-popup__actions__button' and text()='Ok']")
                 self.driver.execute_script("arguments[0].click();", ok_btn)
                 time.sleep(0.5)
-                print(f"      시간 OK 클릭 - 캘린더 닫힘")
             except Exception as e:
-                print(f"      시간 OK 버튼 클릭 실패: {e}")
+                pass
                 
         except Exception as e:
             print(f"      캘린더 선택 실패: {e}")
+    
+    def select_channel_from_multiselect(self, channel_name: str):
+        """multiselect에서 채널 선택"""
+        try:
+            # 채널명 매핑 (한글 → 영문)
+            channel_mapping = {
+                "SSG": "ssg",
+                "지마켓": "gmarket",
+                "지마켓(상품번호)": "gmarket",
+                "옥션": "auction",
+                "옥션(상품번호)": "auction",
+                "11번가": "11st",
+                "쿠팡": "coupang",
+                "위메프": "wemakeprice",
+                "GS샵": "gsshop",
+                "롯데ON": "lotte",
+                "CJ몰": "cjmall",
+                "하프클럽(신규)": "newhalfclub",
+                "롯데아이몰": "lotteimall",
+                "카카오쇼핑하기": "kakaotalkshopping",
+                "카카오스타일": "kakaostyle",
+                "H몰": "hmall"
+            }
+            
+            api_channel_name = channel_mapping.get(channel_name, channel_name.lower())
+            
+            # multiselect 찾기
+            multiselect = None
+            try:
+                multiselect = self.driver.find_element(By.CSS_SELECTOR, ".multiselect.br-select")
+            except:
+                try:
+                    multiselect = self.driver.find_element(By.CSS_SELECTOR, ".multiselect")
+                except:
+                    return False
+            
+            # multiselect 클릭하여 드롭다운 열기
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", multiselect)
+            time.sleep(0.3)
+            self.driver.execute_script("arguments[0].click();", multiselect)
+            time.sleep(1.5)
+            
+            # 채널 옵션 선택
+            channel_options = self.driver.find_elements(By.CSS_SELECTOR, ".multiselect__element")
+            
+            for option in channel_options:
+                try:
+                    inner_span = option.find_element(By.CSS_SELECTOR, ".multiselect__option span")
+                    option_text = inner_span.get_attribute('textContent').strip().lower()
+                except:
+                    option_text = option.get_attribute('textContent').strip().lower()
+                
+                if option_text == api_channel_name:
+                    clickable = option.find_element(By.CSS_SELECTOR, ".multiselect__option")
+                    self.driver.execute_script("arguments[0].click();", clickable)
+                    time.sleep(1)
+                    print(f"    ✓ 채널 선택: {channel_name}")
+                    return True
+            
+            print(f"    ✗ 채널 '{channel_name}' 찾을 수 없음")
+            return False
+            
+        except Exception as e:
+            print(f"    ✗ 채널 선택 실패: {e}")
+            return False
             
     def upload_promotion(self, file_path: str, channel_name: str, start_date: datetime, end_date: datetime):
         """프로모션 업로드"""
@@ -235,16 +274,15 @@ class BeeflowUploader:
         promotion_name = filename.replace('.xlsx', '').replace('_', ' ')
         
         print(f"\n  [업로드] {filename}")
-        print(f"    프로모션명: {promotion_name}")
         print(f"    채널: {channel_name}")
         print(f"    기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
         
         try:
-            print("    페이지 접속...")
+            # 페이지 접속
             self.driver.get("https://b-flow.co.kr/distribution/promotion/create#/")
             time.sleep(2)
             
-            print("    프로모션명 입력...")
+            # 프로모션명 입력
             name_input = self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='프로모션']"))
             )
@@ -252,60 +290,110 @@ class BeeflowUploader:
             name_input.send_keys(promotion_name)
             time.sleep(0.5)
             
-            print("    시작일 설정 (00:00)...")
+            # 시작일 설정
             date_inputs = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime input.form-control")
             if date_inputs:
                 self.driver.execute_script("arguments[0].click();", date_inputs[0])
                 self.select_date_in_calendar(start_date, is_end_time=False)
             
-            print("    종료일 설정 (23:59)...")
+            # 종료일 설정
             date_inputs = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime input.form-control")
             if len(date_inputs) > 1:
                 self.driver.execute_script("arguments[0].click();", date_inputs[1])
                 self.select_date_in_calendar(end_date, is_end_time=True)
             
-            print("    채널 선택...")
-            all_inputs = self.driver.find_elements(By.TAG_NAME, "input")
-            for inp in all_inputs:
-                placeholder = inp.get_attribute('placeholder') or ''
-                if '채널' in placeholder:
-                    inp.clear()
-                    inp.send_keys(channel_name)
-                    time.sleep(0.8)
-                    
+            # 채널 선택
+            self.select_channel_from_multiselect(channel_name)
+            
+            # 상품 체크박스 클릭
+            checkboxes = []
+            try:
+                checkboxes = self.driver.find_elements(By.XPATH, "//label[contains(text(), '상품')]/ancestor::div[contains(@class, 'pretty')]//input[@type='checkbox']")
+            except:
+                pass
+            
+            if not checkboxes:
+                try:
+                    pretty_divs = self.driver.find_elements(By.CSS_SELECTOR, ".pretty")
+                    for div in pretty_divs:
+                        label = div.find_element(By.TAG_NAME, "label")
+                        if "상품" in label.get_attribute('textContent'):
+                            checkbox = div.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
+                            checkboxes = [checkbox]
+                            break
+                except:
+                    pass
+            
+            if checkboxes:
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", checkboxes[0])
+                time.sleep(0.3)
+                
+                if not checkboxes[0].is_selected():
                     try:
-                        option = self.wait.until(
-                            EC.element_to_be_clickable((By.XPATH, f"//li[contains(text(), '{channel_name}')]"))
-                        )
-                        self.driver.execute_script("arguments[0].click();", option)
-                        time.sleep(0.5)
+                        self.driver.execute_script("arguments[0].click();", checkboxes[0])
                     except:
-                        print(f"      경고: 채널 드롭다운 선택 실패")
+                        parent_div = checkboxes[0].find_element(By.XPATH, "..")
+                        self.driver.execute_script("arguments[0].click();", parent_div)
+                    time.sleep(2)
+                    print("    ✓ 상품 체크박스 선택")
+            
+            # 엑셀 업로드 버튼 클릭
+            upload_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), '엑셀 업로드')]")
+            for btn in upload_buttons:
+                if btn.is_displayed() and btn.is_enabled():
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", btn)
+                    time.sleep(0.3)
+                    self.driver.execute_script("arguments[0].click();", btn)
+                    time.sleep(2)
                     break
             
-            print("    상품 버튼 클릭...")
-            product_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '상품')]")
-            for btn in product_btns:
+            # 파일 업로드
+            if not os.path.isabs(file_path):
+                possible_paths = [
+                    os.path.abspath(file_path),
+                    os.path.abspath(os.path.join("..", file_path)),
+                    os.path.abspath(os.path.join(".", file_path.replace("outputs/", "")))
+                ]
+                
+                for test_path in possible_paths:
+                    if os.path.exists(test_path):
+                        abs_file_path = test_path
+                        break
+                else:
+                    raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
+            else:
+                abs_file_path = file_path
+                
+            if not os.path.exists(abs_file_path):
+                raise FileNotFoundError(f"파일이 존재하지 않습니다: {abs_file_path}")
+            
+            file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+            if file_inputs:
+                file_inputs[0].send_keys(abs_file_path)
+                time.sleep(2)
+                print(f"    ✓ 파일 업로드")
+            
+            # 모달 업로드 버튼 클릭
+            modal_upload_btns = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'modal')]//button[contains(text(), '업로드')]")
+            if not modal_upload_btns:
+                modal_upload_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '업로드')]")
+            
+            for btn in modal_upload_btns:
                 if btn.is_displayed() and btn.is_enabled():
                     self.driver.execute_script("arguments[0].click();", btn)
                     break
-            time.sleep(1.5)
             
-            print("    파일 업로드...")
-            file_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
-            )
-            file_input.send_keys(os.path.abspath(file_path))
-            time.sleep(2)
+            # JavaScript Alert 처리
+            try:
+                time.sleep(1)
+                alert = self.driver.switch_to.alert
+                alert.accept()
+                time.sleep(2)
+                print("    ✓ 업로드 확인")
+            except:
+                pass
             
-            print("    업로드 버튼 클릭...")
-            upload_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '업로드')]")
-            for btn in upload_btns:
-                if btn.is_displayed() and btn.is_enabled():
-                    self.driver.execute_script("arguments[0].click();", btn)
-                    break
-            time.sleep(2)
-            
+            # 모달 닫기
             try:
                 close_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '닫기')]")
                 for btn in close_btns:
@@ -316,7 +404,7 @@ class BeeflowUploader:
             except:
                 pass
             
-            print("    저장...")
+            # 저장
             save_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '저장')]")
             for btn in save_btns:
                 if btn.is_displayed() and btn.is_enabled():
@@ -324,14 +412,12 @@ class BeeflowUploader:
                     break
             time.sleep(2)
             
-            print("    ✓ 완료")
+            print("    ✓ 업로드 완료")
             
         except Exception as e:
             print(f"    ✗ 실패: {e}")
-            screenshot_path = f"error_{filename}.png"
             try:
-                self.driver.save_screenshot(screenshot_path)
-                print(f"    스크린샷: {screenshot_path}")
+                self.driver.save_screenshot(f"error_{filename}.png")
             except:
                 pass
             raise
@@ -385,13 +471,29 @@ def upload_promotions_to_beeflow(output_files: list, output_dir: str, email: str
 
 
 if __name__ == "__main__":
-    test_files = [
-        "outputs/251105-251205_상품_SSG_22.xlsx"
-    ]
+    # 테스트용 코드
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    if os.path.exists(os.path.join(script_dir, "..", "outputs")):
+        outputs_dir = os.path.join(script_dir, "..", "outputs")
+    elif os.path.exists(os.path.join(script_dir, "outputs")):
+        outputs_dir = os.path.join(script_dir, "outputs")
+    else:
+        outputs_dir = "outputs"
+    
+    test_file = os.path.join(outputs_dir, "251105-251205_상품_SSG_22.xlsx")
+    test_file = os.path.abspath(test_file)
+    
+    if not os.path.exists(test_file):
+        print("오류: 테스트 파일을 찾을 수 없습니다.")
+        import sys
+        sys.exit(1)
+    
+    test_files = [test_file]
     
     upload_promotions_to_beeflow(
         output_files=test_files,
-        output_dir="outputs",
+        output_dir=outputs_dir,
         email="jsj@brich.co.kr",
         password="young124@"
     )

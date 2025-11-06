@@ -19,13 +19,21 @@ def process_promotion_data(df_input: pd.DataFrame, channel_mappings: Dict) -> pd
     """
     output_rows = []
     
-    for _, row in df_input.iterrows():
+    # 설정일이 없는 상품만 처리 (조회 대상만)
+    df_to_process = df_input[df_input["설정일"].isna()].copy()
+    
+    # 디버깅: 실제로 몇 개를 처리하는지 확인
+    print(f"  디버그: df_input 전체 {len(df_input)}개, 설정일 없음 {len(df_to_process)}개")
+    
+    for _, row in df_to_process.iterrows():
         product_id = int(row['상품번호'])
         channel_info = row['채널']
         
         # 채널 매핑 정보 가져오기
+        # 조회 대상 상품(설정일 없음)만 여기까지 왔으므로, 
+        # 채널 정보가 없으면 실제 문제가 있는 것
         if product_id not in channel_mappings:
-            print(f"  경고: 상품 {product_id} 채널 정보 없음")
+            print(f"  경고: 상품 {product_id} 채널 정보 없음 (API 조회 실패 또는 채널 미등록)")
             continue
         
         product_channels = channel_mappings[product_id]

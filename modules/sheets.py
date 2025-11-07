@@ -209,16 +209,6 @@ def read_sheet(sheet_url: str, credentials_path: str, column_range: str,
     total_rows = len(df)
     na_count = df['설정일'].isna().sum()
     print(f"  디버그: 전체 {total_rows}개 행 중 설정일 없음 {na_count}개")
-    if na_count > 0 and na_count <= 10:
-        na_products = df[df['설정일'].isna()][first_col].tolist()
-        print(f"  설정일 없는 {first_col}: {na_products}")
-    elif na_count > 10:
-        print(f"  ⚠️ 설정일 없는 행이 {na_count}개로 너무 많습니다!")
-        # 샘플 5개만 출력
-        na_sample = df[df['설정일'].isna()].head(5)
-        print(f"  샘플 5개:")
-        for idx, row in na_sample.iterrows():
-            print(f"    {first_col}: {row[first_col]}, 시작일: {row['시작일']}, 설정일 원본: {repr(row.get('설정일'))}")
     
     return df
 

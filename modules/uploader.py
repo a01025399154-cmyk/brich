@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoAlertPresentException, TimeoutException
 
 
 class BeeflowUploader:
@@ -280,7 +281,7 @@ class BeeflowUploader:
                         end_date: datetime, promotion_type: str = "product"):
         """
         프로모션 업로드
-        
+
         Args:
             file_path: 엑셀 파일 경로
             channel_name: 채널명
@@ -290,17 +291,17 @@ class BeeflowUploader:
         """
         filename = os.path.basename(file_path)
         promotion_name = filename.replace('.xlsx', '').replace('_', ' ')
-        
+
         print(f"\n  [업로드] {filename}")
         print(f"    채널: {channel_name}")
         print(f"    기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
         print(f"    타입: {promotion_type}")
-        
+
         try:
             # 페이지 접속
             self.driver.get("https://b-flow.co.kr/distribution/promotion/create#/")
             time.sleep(4)  # 페이지 로딩 대기
-            
+
             # 프로모션명 입력
             name_input = self.wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='프로모션']"))
@@ -308,91 +309,110 @@ class BeeflowUploader:
             name_input.clear()
             name_input.send_keys(promotion_name)
             time.sleep(0.5)
-            
+
             # 시작일 설정
             date_inputs = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime input.form-control")
             if date_inputs:
                 self.driver.execute_script("arguments[0].click();", date_inputs[0])
                 self.select_date_in_calendar(start_date, is_end_time=False)
-            
+
             # 종료일 설정
             date_inputs = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime input.form-control")
             if len(date_inputs) > 1:
                 self.driver.execute_script("arguments[0].click();", date_inputs[1])
                 self.select_date_in_calendar(end_date, is_end_time=True)
-            
-            # 채널 선택
-            self.select_channel_from_multiselect(channel_name)
-            
+
+            # 채널 선택 (실패 시 바로 예외)
+            selected = self.select_channel_from_multiselect(channel_name)
+            if not selected:
+                raise Exception(f"채널 '{channel_name}' 선택에 실패했습니다.")
+
             # 체크박스 클릭
             self._click_checkbox(promotion_type)
-            
+
             # 엑셀 업로드 버튼 클릭
             upload_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), '엑셀 업로드')]")
+            clicked_upload_btn = False
             for btn in upload_buttons:
                 if btn.is_displayed() and btn.is_enabled():
                     self.driver.execute_script("arguments[0].scrollIntoView(true);", btn)
                     time.sleep(0.3)
                     self.driver.execute_script("arguments[0].click();", btn)
                     time.sleep(2)
+                    clicked_upload_btn = True
                     break
-            
+
+            if not clicked_upload_btn:
+                raise Exception("엑셀 업로드 버튼을 찾을 수 없습니다.")
+
             # 파일 업로드
             abs_file_path = self._get_absolute_path(file_path)
-            
+
             file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
             if file_inputs:
                 file_inputs[0].send_keys(abs_file_path)
                 time.sleep(1)
-                
+
                 # 파일이 선택되었는지 확인
                 try:
-                    # JavaScript로 파일명 확인
                     file_name = self.driver.execute_script("return arguments[0].files[0].name", file_inputs[0])
                     print(f"    ✓ 파일 선택 완료: {file_name}")
-                except:
+                except Exception:
                     print(f"    ⚠️  파일 선택 확인 실패")
-                
+
                 time.sleep(2)
-                print(f"    ✓ 파일 업로드")
+                print(f"    ✓ 파일 업로드 시도")
             else:
-                print(f"    ✗ 파일 input을 찾을 수 없음")
                 raise Exception("파일 input 요소를 찾을 수 없습니다")
-            
+
             # 모달 업로드 버튼 클릭
             time.sleep(1)  # 파일 선택 후 UI 업데이트 대기
-            modal_upload_btns = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'modal')]//button[contains(text(), '업로드')]")
+            modal_upload_btns = self.driver.find_elements(
+                By.XPATH,
+                "//div[contains(@class, 'modal')]//button[contains(text(), '업로드')]"
+            )
             if not modal_upload_btns:
                 modal_upload_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '업로드')]")
-            
+
+            clicked_modal_upload = False
             if modal_upload_btns:
                 for btn in modal_upload_btns:
                     if btn.is_displayed() and btn.is_enabled():
                         print(f"    ✓ 모달 업로드 버튼 클릭")
                         self.driver.execute_script("arguments[0].click();", btn)
+                        clicked_modal_upload = True
                         break
-            else:
-                print(f"    ✗ 업로드 버튼을 찾을 수 없음")
-            
+
+            if not clicked_modal_upload:
+                raise Exception("모달 업로드 버튼을 찾을 수 없습니다.")
+
             # JavaScript Alert 처리 (성공/실패 메시지 확인)
             try:
-                time.sleep(2)  # Alert 대기 시간 증가
+                time.sleep(2)
                 alert = self.driver.switch_to.alert
-                alert_text = alert.text
-                print(f"    Alert 메시지: {alert_text}")
+                alert_text = alert.text.strip()
+                print(f"    [알럿] {alert_text}")
                 alert.accept()
                 time.sleep(2)
-                
-                # 에러 메시지 체크
-                if "양식" in alert_text or "형식" in alert_text or "오류" in alert_text:
-                    print(f"    ✗ 업로드 실패: {alert_text}")
+
+                excel_keywords = ["엑셀 양식", "양식이 맞지", "양식이 올바르지", "엑셀 형식", "엑셀형식"]
+                fail_keywords = ["실패", "에러", "오류", "잘못된", "불러올 수 없습니다"]
+
+                if any(k in alert_text for k in excel_keywords):
+                    print(f"    ✗ 엑셀 양식 관련 오류: {alert_text}")
                     raise Exception(f"엑셀 양식 오류: {alert_text}")
+                elif any(k in alert_text for k in fail_keywords):
+                    print(f"    ✗ 업로드 관련 오류: {alert_text}")
+                    raise Exception(f"업로드 오류: {alert_text}")
                 else:
-                    print("    ✓ 업로드 확인")
+                    print("    ✓ 알럿 확인 (성공/정보 메시지로 판단)")
+
+            except NoAlertPresentException:
+                print("    (알럿 없음)")
             except Exception as e:
                 if "no such alert" not in str(e).lower():
                     raise
-            
+
             # 모달 닫기
             try:
                 close_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '닫기')]")
@@ -401,9 +421,9 @@ class BeeflowUploader:
                         self.driver.execute_script("arguments[0].click();", btn)
                         break
                 time.sleep(0.5)
-            except:
+            except Exception:
                 pass
-            
+
             # 저장
             save_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '저장')]")
             for btn in save_btns:
@@ -411,7 +431,7 @@ class BeeflowUploader:
                     self.driver.execute_script("arguments[0].click();", btn)
                     break
             time.sleep(2)
-            
+
             # 중복 리스트 모달의 확인 버튼 처리
             try:
                 confirm_btns = self.driver.find_elements(By.CSS_SELECTOR, ".br-btn-purple")
@@ -420,29 +440,29 @@ class BeeflowUploader:
                         self.driver.execute_script("arguments[0].click();", btn)
                         time.sleep(1)
                         break
-            except:
+            except Exception:
                 pass
-            
+
             # JavaScript Alert 처리 (중복 리스트 확인 후)
             try:
                 time.sleep(1)
                 alert = self.driver.switch_to.alert
                 alert.accept()
                 time.sleep(1)
-            except:
+            except Exception:
                 pass
-            
+
             print("    ✓ 업로드 완료")
-            
+
             # 다음 업로드를 위해 즉시 새 페이지로 이동
             self.driver.get("https://b-flow.co.kr/distribution/promotion/create#/")
             time.sleep(4)
-            
+
         except Exception as e:
             print(f"    ✗ 실패: {e}")
             try:
                 self.driver.save_screenshot(f"error_{filename}.png")
-            except:
+            except Exception:
                 pass
             raise
     

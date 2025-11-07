@@ -7,7 +7,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from openpyxl import load_workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, numbers
 from typing import List
 
 
@@ -44,6 +44,30 @@ def generate_upload_files(df: pd.DataFrame, output_dir: str, file_prefix: str = 
         columns_to_save = [col for col in group_df.columns if col not in ['시작일', '종료일', '채널명']]
         df_to_save = group_df[columns_to_save].copy()
         
+        # 상품번호/브랜드번호를 문자열로 변환
+        number_col = '상품번호' if '상품번호' in df_to_save.columns else '브랜드번호'
+        if number_col in df_to_save.columns:
+            # NaN이 아닌 값만 정수로 변환 후 문자열로
+            df_to_save[number_col] = df_to_save[number_col].apply(
+                lambda x: str(int(float(x))) if pd.notna(x) else ''
+            )
+        
+        # 할인 컬럼만 정수로 변환 (내부할인, 연동할인, 외부할인가, 할인, 할인2)
+        discount_value_cols = ['내부할인', '연동할인', '외부할인가', '할인', '할인2']
+        for col in discount_value_cols:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: int(float(x)) if pd.notna(x) and str(x) != '' else 0
+                )
+        
+        # 분담율은 문자열로 변환
+        rate_cols = ['채널분담율', '브리치분담율', '입점사분담율']
+        for col in rate_cols:
+            if col in df_to_save.columns:
+                df_to_save[col] = df_to_save[col].apply(
+                    lambda x: str(int(float(x))) if pd.notna(x) and str(x) != '' else '0'
+                )
+        
         # 엑셀 파일 생성
         df_to_save.to_excel(filepath, index=False, engine='openpyxl')
         
@@ -56,6 +80,37 @@ def generate_upload_files(df: pd.DataFrame, output_dir: str, file_prefix: str = 
         for cell in ws[1]:
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center')
+            cell.number_format = '@'  # 헤더도 텍스트 형식
+        
+        # 상품번호/브랜드번호 컬럼을 텍스트 형식으로 명시적 설정
+        number_col_letter = None
+        for idx, col in enumerate(columns_to_save, 1):
+            if col in ['상품번호', '브랜드번호']:
+                number_col_letter = chr(64 + idx)  # A=65, B=66, ...
+                break
+        
+        if number_col_letter:
+            # 상품번호/브랜드번호 컬럼의 모든 셀을 텍스트 형식으로 설정
+            for row in range(2, ws.max_row + 1):
+                cell = ws[f'{number_col_letter}{row}']
+                if cell.value is not None:
+                    try:
+                        # 정수로 변환 후 문자열로 저장
+                        cell.value = str(int(float(cell.value)))
+                        cell.number_format = '@'  # 텍스트 형식
+                    except:
+                        pass
+        
+        # 할인타입, 분담율 컬럼을 텍스트 형식으로 설정
+        text_format_cols = ['내부할인타입', '연동할인타입', '외부할인타입', '할인타입',
+                           '채널분담율', '브리치분담율', '입점사분담율']
+        for col_idx, col_name in enumerate(columns_to_save, 1):
+            if col_name in text_format_cols:
+                col_letter = chr(64 + col_idx)
+                for row in range(2, ws.max_row + 1):
+                    cell = ws[f'{col_letter}{row}']
+                    if cell.value is not None:
+                        cell.number_format = '@'
         
         # 컬럼 너비 자동 조정
         for column in ws.columns:
@@ -73,6 +128,22 @@ def generate_upload_files(df: pd.DataFrame, output_dir: str, file_prefix: str = 
             ws.column_dimensions[column_letter].width = adjusted_width
         
         # 저장
+        wb.save(filepath)
+        
+        # 비플로우 양식 맞추기: 빈 행/열 추가 및 포맷 설정
+        wb = load_workbook(filepath)
+        ws = wb.active
+        
+        # 최소 100행 x 20열로 확장
+        min_rows = 100
+        min_cols = 20
+        
+        # 모든 셀에 텍스트 포맷 적용 (빈 셀 포함)
+        for row_idx in range(2, min_rows + 1):
+            for col_idx in range(1, min_cols + 1):
+                cell = ws.cell(row_idx, col_idx)
+                cell.number_format = '@'
+        
         wb.save(filepath)
         
         generated_files.append(filepath)

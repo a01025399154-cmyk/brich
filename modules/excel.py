@@ -71,46 +71,39 @@ def generate_upload_files(df: pd.DataFrame, output_dir: str, file_prefix: str = 
         # 엑셀 파일 생성
         df_to_save.to_excel(filepath, index=False, engine='openpyxl')
         
-        # 포맷팅
+        # ✅ FIX: 포맷팅 - 브랜드 프로모션 호환을 위해 모든 셀을 텍스트로
         wb = load_workbook(filepath)
         ws = wb.active
         
-        # 헤더 스타일
+        # 헤더 스타일 - 모든 헤더를 텍스트 형식으로
         header_font = Font(bold=True)
         for cell in ws[1]:
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center')
-            cell.number_format = '@'  # 헤더도 텍스트 형식
+            cell.number_format = '@'
         
-        # 상품번호/브랜드번호 컬럼을 텍스트 형식으로 명시적 설정
-        number_col_letter = None
-        for idx, col in enumerate(columns_to_save, 1):
-            if col in ['상품번호', '브랜드번호']:
-                number_col_letter = chr(64 + idx)  # A=65, B=66, ...
-                break
-        
-        if number_col_letter:
-            # 상품번호/브랜드번호 컬럼의 모든 셀을 텍스트 형식으로 설정
-            for row in range(2, ws.max_row + 1):
-                cell = ws[f'{number_col_letter}{row}']
+        # 모든 데이터 셀을 텍스트 형식으로 설정
+        for row in range(2, ws.max_row + 1):
+            for col in range(1, ws.max_column + 1):
+                cell = ws.cell(row, col)
                 if cell.value is not None:
-                    try:
-                        # 정수로 변환 후 문자열로 저장
-                        cell.value = str(int(float(cell.value)))
-                        cell.number_format = '@'  # 텍스트 형식
-                    except:
-                        pass
-        
-        # 할인타입, 분담율 컬럼을 텍스트 형식으로 설정
-        text_format_cols = ['내부할인타입', '연동할인타입', '외부할인타입', '할인타입',
-                           '채널분담율', '브리치분담율', '입점사분담율']
-        for col_idx, col_name in enumerate(columns_to_save, 1):
-            if col_name in text_format_cols:
-                col_letter = chr(64 + col_idx)
-                for row in range(2, ws.max_row + 1):
-                    cell = ws[f'{col_letter}{row}']
-                    if cell.value is not None:
+                    # 브랜드번호/상품번호는 문자열로 확실히 변환
+                    col_name = ws.cell(1, col).value
+                    if col_name in ['브랜드번호', '상품번호']:
+                        try:
+                            cell.value = str(int(float(cell.value)))
+                        except:
+                            cell.value = str(cell.value)
+                
+                # ✅ FIX: 할인 값 컬럼은 숫자 포맷(General)으로 유지
+                col_name = ws.cell(1, col).value
+                if col_name in ['할인', '내부할인', '연동할인', '외부할인가']:
+                    if isinstance(cell.value, (int, float)):
+                        cell.number_format = 'General'
+                    else:
                         cell.number_format = '@'
+                else:
+                    cell.number_format = '@'
         
         # 컬럼 너비 자동 조정
         for column in ws.columns:
@@ -134,15 +127,29 @@ def generate_upload_files(df: pd.DataFrame, output_dir: str, file_prefix: str = 
         wb = load_workbook(filepath)
         ws = wb.active
         
-        # 최소 100행 x 20열로 확장
-        min_rows = 100
-        min_cols = 20
+        # ✅ FIX: 시트명을 '시트1'로 변경 (비플로우 호환)
+        ws.title = '시트1'
+        
+        # ✅ FIX: 최소 999행 x 40열로 확장 (수동 업로드 파일과 동일)
+        min_rows = 999
+        min_cols = 40
+        
+        # 할인 값 컬럼 인덱스 찾기
+        discount_cols = []
+        for col_idx in range(1, ws.max_column + 1):
+            col_name = ws.cell(1, col_idx).value
+            if col_name in ['할인', '내부할인', '연동할인', '외부할인가']:
+                discount_cols.append(col_idx)
         
         # 모든 셀에 텍스트 포맷 적용 (빈 셀 포함)
-        for row_idx in range(2, min_rows + 1):
+        for row_idx in range(1, min_rows + 1):
             for col_idx in range(1, min_cols + 1):
                 cell = ws.cell(row_idx, col_idx)
-                cell.number_format = '@'
+                # ✅ FIX: 할인 값 컬럼은 General 포맷 유지 (빈 셀 포함)
+                if col_idx in discount_cols and row_idx > 1:
+                    cell.number_format = 'General'
+                else:
+                    cell.number_format = '@'
         
         wb.save(filepath)
         

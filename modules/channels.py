@@ -169,36 +169,3 @@ def parse_channel_dropdown(channel_str: str, available_channels: Optional[Dict[s
         # 특정 채널(들)
         target_channels = mapping_value  # 리스트
         return {ch: "" for ch in target_channels}
-
-
-if __name__ == "__main__":
-    # 테스트
-    
-    # 브랜드 프로모션 테스트
-    print("=== 브랜드 프로모션 테스트 ===")
-    result1 = parse_channel_dropdown("*전 채널", None)
-    print(f"*전 채널: {list(result1.keys())}")
-    
-    result2 = parse_channel_dropdown("지마켓/옥션", None)
-    print(f"지마켓/옥션: {list(result2.keys())}")
-    
-    result3 = parse_channel_dropdown("SSG", None)
-    print(f"SSG: {list(result3.keys())}")
-    
-    # 상품 프로모션 테스트
-    print("\n=== 상품 프로모션 테스트 ===")
-    available = {
-        "SSG": "1000614610607",
-        "쿠팡": "200012345678",
-        "지마켓": "123456789",
-        "GS Shop": "999999"
-    }
-    
-    result4 = parse_channel_dropdown("*전 채널", available)
-    print(f"*전 채널: {result4}")
-    
-    result5 = parse_channel_dropdown("*전 채널 (gs제외)", available)
-    print(f"*전 채널 (gs제외): {result5}")
-    
-    result6 = parse_channel_dropdown("SSG", available)
-    print(f"SSG: {result6}")

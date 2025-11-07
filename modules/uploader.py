@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 비플로우 웹사이트 자동 업로드 모듈
 Selenium을 사용하여 프로모션 관리에 엑셀 파일 업로드
@@ -36,37 +39,52 @@ class BeeflowUploader:
         self.wait = WebDriverWait(self.driver, 15)
         
     def login(self):
-        """비플로우 로그인"""
+        """비플로우 로그인 (불필요한 sleep 최소화)"""
         print("  [로그인] 시작...")
         self.driver.get("https://b-flow.co.kr")
-        time.sleep(2)
         
         try:
+            # 로그인 버튼이 실제로 클릭 가능할 때까지 대기
             login_btn = self.wait.until(
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '로그인')]"))
             )
             self.driver.execute_script("arguments[0].click();", login_btn)
-            time.sleep(1.5)
             
+            # 이메일 입력창이 보일 때까지 대기
             email_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email']"))
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='email']"))
             )
+            email_input.clear()
             email_input.send_keys(self.email)
-            time.sleep(0.5)
             
-            password_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
+            # 비밀번호 입력
+            password_input = self.wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='password']"))
+            )
+            password_input.clear()
             password_input.send_keys(self.password)
-            time.sleep(0.5)
             
-            submit_btn = self.driver.find_element(By.CSS_SELECTOR, ".modal .login-btn, .v--modal .login-btn")
+            # 로그인 버튼 클릭
+            submit_btn = self.driver.find_element(
+                By.CSS_SELECTOR, ".modal .login-btn, .v--modal .login-btn"
+            )
             self.driver.execute_script("arguments[0].click();", submit_btn)
             
-            time.sleep(2)
+            # 로그인 성공 후, 상단 메뉴(예: '배포관리')가 보일 때까지 대기
+            # (필요하면 CSS 셀렉터를 다른 걸로 바꿔도 됨)
+            self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "nav, .br-gnb, .navbar"))
+            )
+            
             print("  ✓ 로그인 완료")
             
         except Exception as e:
             print(f"  ✗ 로그인 실패: {e}")
-            self.driver.save_screenshot("login_error.png")
+            try:
+                self.driver.save_screenshot("login_error.png")
+                print("  (스크린샷 저장: login_error.png)")
+            except Exception:
+                pass
             raise
     
     def select_date_in_calendar(self, target_date: datetime, is_end_time: bool = False):
@@ -278,7 +296,7 @@ class BeeflowUploader:
             return False
             
     def upload_promotion(self, file_path: str, channel_name: str, start_date: datetime, 
-                        end_date: datetime, promotion_type: str = "product"):
+                        end_date: datetime, promotion_type: str = "product") -> bool:
         """
         프로모션 업로드
 
@@ -288,27 +306,38 @@ class BeeflowUploader:
             start_date: 시작일
             end_date: 종료일
             promotion_type: "product" 또는 "brand"
+
+        Returns:
+            bool: 업로드 + 저장까지 정상 완료되면 True, 중간에 어떤 에러든 나면 False
         """
         filename = os.path.basename(file_path)
         promotion_name = filename.replace('.xlsx', '').replace('_', ' ')
 
-        print(f"\n  [업로드] {filename}")
-        print(f"    채널: {channel_name}")
-        print(f"    기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
-        print(f"    타입: {promotion_type}")
+        print(f"  ▷ 파일: {filename}")
+        print(f"    - 채널: {channel_name}")
+        print(f"    - 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+        print(f"    - 타입: {promotion_type}")
+
+        # 알럿/모달 텍스트에서 에러 여부를 판별할 키워드
+        excel_keywords = ["엑셀 양식", "양식이 맞지", "양식이 올바르지", "엑셀 형식", "엑셀형식"]
+        fail_keywords = ["실패", "에러", "오류", "잘못된", "불러올 수 없습니다"]
 
         try:
-            # 페이지 접속
+            # 페이지 접속 (페이지 로딩은 name_input Wait으로 대체)
             self.driver.get("https://b-flow.co.kr/distribution/promotion/create#/")
-            time.sleep(4)  # 페이지 로딩 대기
-
-            # 프로모션명 입력
+            
+            # 프로모션명 입력 (실제로 클릭 가능할 때까지 대기)
             name_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder*='프로모션']"))
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "input[placeholder*='프로모션']"))
             )
-            name_input.clear()
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", name_input)
+            time.sleep(0.2)
+            try:
+                name_input.clear()
+            except Exception:
+                self.driver.execute_script("arguments[0].value='';", name_input)
+            time.sleep(0.1)
             name_input.send_keys(promotion_name)
-            time.sleep(0.5)
 
             # 시작일 설정
             date_inputs = self.driver.find_elements(By.CSS_SELECTOR, ".vdatetime input.form-control")
@@ -322,10 +351,11 @@ class BeeflowUploader:
                 self.driver.execute_script("arguments[0].click();", date_inputs[1])
                 self.select_date_in_calendar(end_date, is_end_time=True)
 
-            # 채널 선택 (실패 시 바로 예외)
+            # 채널 선택 (실패 시 바로 False)
             selected = self.select_channel_from_multiselect(channel_name)
             if not selected:
-                raise Exception(f"채널 '{channel_name}' 선택에 실패했습니다.")
+                print(f"    ✗ 채널 선택 실패: {channel_name}")
+                return False
 
             # 체크박스 클릭
             self._click_checkbox(promotion_type)
@@ -336,14 +366,14 @@ class BeeflowUploader:
             for btn in upload_buttons:
                 if btn.is_displayed() and btn.is_enabled():
                     self.driver.execute_script("arguments[0].scrollIntoView(true);", btn)
-                    time.sleep(0.3)
+                    time.sleep(0.2)
                     self.driver.execute_script("arguments[0].click();", btn)
-                    time.sleep(2)
                     clicked_upload_btn = True
                     break
 
             if not clicked_upload_btn:
-                raise Exception("엑셀 업로드 버튼을 찾을 수 없습니다.")
+                print("    ✗ 엑셀 업로드 버튼을 찾을 수 없습니다.")
+                return False
 
             # 파일 업로드
             abs_file_path = self._get_absolute_path(file_path)
@@ -351,22 +381,14 @@ class BeeflowUploader:
             file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
             if file_inputs:
                 file_inputs[0].send_keys(abs_file_path)
-                time.sleep(1)
-
-                # 파일이 선택되었는지 확인
-                try:
-                    file_name = self.driver.execute_script("return arguments[0].files[0].name", file_inputs[0])
-                    print(f"    ✓ 파일 선택 완료: {file_name}")
-                except Exception:
-                    print(f"    ⚠️  파일 선택 확인 실패")
-
-                time.sleep(2)
+                time.sleep(0.5)
                 print(f"    ✓ 파일 업로드 시도")
             else:
-                raise Exception("파일 input 요소를 찾을 수 없습니다")
+                print("    ✗ 파일 input 요소를 찾을 수 없습니다")
+                return False
 
             # 모달 업로드 버튼 클릭
-            time.sleep(1)  # 파일 선택 후 UI 업데이트 대기
+            time.sleep(0.5)  # 파일 선택 후 UI 업데이트 약간만 대기
             modal_upload_btns = self.driver.find_elements(
                 By.XPATH,
                 "//div[contains(@class, 'modal')]//button[contains(text(), '업로드')]"
@@ -384,53 +406,121 @@ class BeeflowUploader:
                         break
 
             if not clicked_modal_upload:
-                raise Exception("모달 업로드 버튼을 찾을 수 없습니다.")
+                print("    ✗ 모달 업로드 버튼을 찾을 수 없습니다.")
+                return False
 
-            # JavaScript Alert 처리 (성공/실패 메시지 확인)
+            # ─────────────────────────────────────────────
+            # 1차 알럿: "업로드를 진행하시겠습니까?" (진행 여부)
+            # ─────────────────────────────────────────────
+            had_any_alert_error = False
+
             try:
-                time.sleep(2)
+                time.sleep(0.7)
                 alert = self.driver.switch_to.alert
                 alert_text = alert.text.strip()
-                print(f"    [알럿] {alert_text}")
+                print(f"    [알럿-1] {alert_text}")
                 alert.accept()
-                time.sleep(2)
+                time.sleep(0.5)
 
-                excel_keywords = ["엑셀 양식", "양식이 맞지", "양식이 올바르지", "엑셀 형식", "엑셀형식"]
-                fail_keywords = ["실패", "에러", "오류", "잘못된", "불러올 수 없습니다"]
-
-                if any(k in alert_text for k in excel_keywords):
-                    print(f"    ✗ 엑셀 양식 관련 오류: {alert_text}")
-                    raise Exception(f"엑셀 양식 오류: {alert_text}")
-                elif any(k in alert_text for k in fail_keywords):
-                    print(f"    ✗ 업로드 관련 오류: {alert_text}")
-                    raise Exception(f"업로드 오류: {alert_text}")
+                if "업로드를 진행하시겠습니까" in alert_text:
+                    print("    ✓ 업로드 진행 여부 알럿 처리 (실제 결과는 추가 확인)")
                 else:
-                    print("    ✓ 알럿 확인 (성공/정보 메시지로 판단)")
+                    if any(k in alert_text for k in excel_keywords):
+                        print(f"    ✗ 엑셀 양식 관련 오류(알럿-1)")
+                        return False
+                    elif any(k in alert_text for k in fail_keywords):
+                        print(f"    ✗ 업로드 관련 오류(알럿-1)")
+                        return False
+                    else:
+                        print("    ✓ 알럿-1 확인 (성공/정보 메시지로 판단)")
 
             except NoAlertPresentException:
-                print("    (알럿 없음)")
-            except Exception as e:
-                if "no such alert" not in str(e).lower():
-                    raise
+                print("    (1차 알럿 없음)")
 
-            # 모달 닫기
+            # ─────────────────────────────────────────────
+            # 2차 알럿: 실제 결과 알럿 (있을 수도, 없을 수도)
+            # ─────────────────────────────────────────────
+            if not had_any_alert_error:
+                try:
+                    time.sleep(0.7)
+                    alert2 = self.driver.switch_to.alert
+                    alert2_text = alert2.text.strip()
+                    print(f"    [알럿-2] {alert2_text}")
+                    alert2.accept()
+                    time.sleep(0.5)
+
+                    if any(k in alert2_text for k in excel_keywords):
+                        print(f"    ✗ 엑셀 양식 관련 오류(알럿-2)")
+                        return False
+                    elif any(k in alert2_text for k in fail_keywords):
+                        print(f"    ✗ 업로드 관련 오류(알럿-2)")
+                        return False
+                    else:
+                        print("    ✓ 알럿-2 확인 (성공/정보 메시지로 판단)")
+
+                except NoAlertPresentException:
+                    print("    (2차 알럿 없음, 결과 모달만 있을 수 있음)")
+
+            # ─────────────────────────────────────────────
+            # 결과 모달 검사 (페이지 안에 뜨는 팝업 텍스트)
+            # ─────────────────────────────────────────────
+            time.sleep(0.7)
+            modals = self.driver.find_elements(By.CSS_SELECTOR, ".modal, .v--modal-box")
+            for modal in modals:
+                try:
+                    if not modal.is_displayed():
+                        continue
+                except Exception:
+                    continue
+
+                text = modal.text.strip()
+                if not text:
+                    continue
+
+                lines = text.splitlines()
+                preview = "\n      ".join(lines[:5])
+                print("    [결과 모달 텍스트 일부]")
+                print(f"      {preview}")
+
+                if any(k in text for k in excel_keywords):
+                    print(f"    ✗ 엑셀 양식 관련 오류(모달)")
+                    return False
+                if any(k in text for k in fail_keywords):
+                    print(f"    ✗ 업로드 관련 오류(모달)")
+                    return False
+
+                # 에러 키워드가 없으면 닫기/확인 버튼 눌러서 정리
+                try:
+                    close_btns = modal.find_elements(
+                        By.XPATH,
+                        ".//button[contains(text(), '닫기') or contains(text(), '확인')]"
+                    )
+                    for btn in close_btns:
+                        if btn.is_displayed() and btn.is_enabled():
+                            self.driver.execute_script("arguments[0].click();", btn)
+                            time.sleep(0.3)
+                            break
+                except Exception:
+                    pass
+
+            # 혹시 남아 있는 '닫기' 버튼 정리
             try:
                 close_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '닫기')]")
                 for btn in close_btns:
                     if btn.is_displayed():
                         self.driver.execute_script("arguments[0].click();", btn)
                         break
-                time.sleep(0.5)
+                time.sleep(0.3)
             except Exception:
                 pass
 
-            # 저장
+            # 저장 버튼 클릭 (실제 프로모션 저장 단계)
             save_btns = self.driver.find_elements(By.XPATH, "//button[contains(text(), '저장')]")
             for btn in save_btns:
                 if btn.is_displayed() and btn.is_enabled():
                     self.driver.execute_script("arguments[0].click();", btn)
                     break
-            time.sleep(2)
+            time.sleep(0.7)
 
             # 중복 리스트 모달의 확인 버튼 처리
             try:
@@ -438,33 +528,36 @@ class BeeflowUploader:
                 for btn in confirm_btns:
                     if btn.is_displayed() and btn.is_enabled() and "확인" in btn.text:
                         self.driver.execute_script("arguments[0].click();", btn)
-                        time.sleep(1)
+                        time.sleep(0.5)
                         break
             except Exception:
                 pass
 
             # JavaScript Alert 처리 (중복 리스트 확인 후)
             try:
-                time.sleep(1)
+                time.sleep(0.5)
                 alert = self.driver.switch_to.alert
                 alert.accept()
-                time.sleep(1)
+                time.sleep(0.3)
             except Exception:
                 pass
 
-            print("    ✓ 업로드 완료")
+            print("    ✅ 업로드 + 저장 완료")
 
-            # 다음 업로드를 위해 즉시 새 페이지로 이동
+            # 다음 업로드를 위해 새 페이지로 이동 (대기도 wait 기반으로)
             self.driver.get("https://b-flow.co.kr/distribution/promotion/create#/")
-            time.sleep(4)
+            # 다음 루프에서 어차피 name_input을 다시 wait 하므로 여기선 추가 sleep 생략
+
+            return True
 
         except Exception as e:
-            print(f"    ✗ 실패: {e}")
+            print(f"    ✗ 예외 발생: {e}")
             try:
                 self.driver.save_screenshot(f"error_{filename}.png")
+                print(f"    (스크린샷 저장: error_{filename}.png)")
             except Exception:
                 pass
-            raise
+            return False
     
     def _click_checkbox(self, promotion_type: str):
         """체크박스 클릭 (상품 또는 브랜드)"""
@@ -531,7 +624,7 @@ class BeeflowUploader:
 
 
 def upload_promotions(output_files: List[str], output_dir: str, email: str, 
-                     password: str, promotion_type: str = "product"):
+                     password: str):
     """
     생성된 엑셀 파일들을 비플로우에 자동 업로드
     
@@ -540,10 +633,9 @@ def upload_promotions(output_files: List[str], output_dir: str, email: str,
         output_dir: 출력 디렉토리
         email: 비플로우 이메일
         password: 비플로우 비밀번호
-        promotion_type: "product" 또는 "brand"
     """
     print("\n" + "=" * 60)
-    print(f"비플로우 자동 업로드 시작 ({promotion_type})")
+    print("비플로우 자동 업로드 시작")
     print("=" * 60)
     
     uploader = BeeflowUploader(email, password)
@@ -552,31 +644,147 @@ def upload_promotions(output_files: List[str], output_dir: str, email: str,
         uploader.init_driver()
         uploader.login()
         
+        total = len(output_files)
         success_count = 0
-        for file_path in output_files:
+        processed_count = 0
+
+        for idx, file_path in enumerate(output_files, start=1):
+            filename = os.path.basename(file_path)
+            print("\n" + "-" * 60)
+            print(f"[{idx}/{total}] 파일 처리 시작: {filename}")
+
             try:
-                filename = os.path.basename(file_path)
-                parts = filename.replace('.xlsx', '').split('_')
+                name_without_ext = filename.replace('.xlsx', '')
+                parts = name_without_ext.split('_')
                 
-                if len(parts) >= 3:
-                    date_range = parts[0]
-                    channel_name = parts[2]
-                    
-                    dates = date_range.split('-')
-                    start_date = datetime.strptime('20' + dates[0], '%Y%m%d')
-                    end_date = datetime.strptime('20' + dates[1], '%Y%m%d')
-                    
-                    uploader.upload_promotion(file_path, channel_name, start_date, end_date, promotion_type)
+                if len(parts) < 3:
+                    raise ValueError(f"파일명 형식이 예상과 다릅니다: {filename}")
+                
+                # 1) 날짜 범위
+                date_range = parts[0]  # "251105-251205"
+                dates = date_range.split('-')
+                if len(dates) != 2:
+                    raise ValueError(f"날짜 구간 형식이 잘못되었습니다: {date_range}")
+                
+                start_date = datetime.strptime('20' + dates[0], '%Y%m%d')
+                end_date = datetime.strptime('20' + dates[1], '%Y%m%d')
+                
+                # 2) 프로모션 타입 (브랜드 / 상품)
+                raw_type = parts[1]
+                if "브랜드" in raw_type:
+                    promotion_type = "brand"
+                else:
+                    promotion_type = "product"
+                
+                # 3) 채널명
+                channel_name = parts[2]
+                
+                print(f"  - 유형: {raw_type} → {promotion_type}")
+                print(f"  - 채널: {channel_name}")
+
+                ok = uploader.upload_promotion(
+                    file_path=file_path,
+                    channel_name=channel_name,
+                    start_date=start_date,
+                    end_date=end_date,
+                    promotion_type=promotion_type,
+                )
+
+                processed_count += 1
+
+                if ok:
                     success_count += 1
-                    
+                    print(f"[{idx}/{total}] ✅ 성공: {filename}")
+                else:
+                    print(f"[{idx}/{total}] ❌ 실패: {filename}")
+                    print("\n‼ 첫 업로드 실패 발생 → 이후 작업을 중단합니다.")
+                    break
+            
             except Exception as e:
-                print(f"  ✗ {filename} 실패: {e}")
-                continue
+                processed_count += 1
+                print(f"[{idx}/{total}] ❌ 예외로 실패: {filename}")
+                print(f"  - 원인: {e}")
+                print("\n‼ 예외 발생으로 인해 이후 작업을 중단합니다.")
+                break
         
         print("\n" + "=" * 60)
-        print(f"업로드 완료: {success_count}/{len(output_files)}개 성공")
+        print("업로드 작업 요약")
+        print("-" * 60)
+        print(f"총 대상 파일 수 : {total}")
+        print(f"처리한 파일 수 : {processed_count}")
+        print(f"성공한 파일 수 : {success_count}")
+        print(f"실패한 파일 수 : {processed_count - success_count}")
+        if processed_count < total:
+            print("※ 중간에 실패가 발생하여 남은 파일은 처리하지 않았습니다.")
         print("=" * 60)
         
     finally:
-        time.sleep(2)
+        time.sleep(1)
         uploader.close()
+
+
+# ─────────────────────────────────────
+# 하드코딩 계정 + 간단 main 진입점
+# ─────────────────────────────────────
+if __name__ == "__main__":
+    from pathlib import Path
+
+    # 🔐 하드코딩된 로그인 정보
+    BEEFLOW_EMAIL = "jsj@brich.co.kr"
+    BEEFLOW_PASSWORD = "young124@"
+
+    print("=" * 60)
+    print("비플로우 업로더 단독 테스트 모드")
+    print("=" * 60)
+
+    # 1) 경로 설정
+    current_file = Path(__file__).resolve()
+    project_root = current_file.parent.parent
+    output_dir = project_root / "outputs"
+
+    print(f"- 프로젝트 루트: {project_root}")
+    print(f"- 출력 디렉토리: {output_dir}")
+
+    if not output_dir.exists():
+        print(f"✗ 출력 디렉토리가 없습니다: {output_dir}")
+        raise SystemExit(1)
+
+    # 2) 엑셀 파일 스캔
+    all_files = sorted(output_dir.glob("*.xlsx"))
+
+    if not all_files:
+        print("✗ 업로드할 엑셀 파일( *.xlsx )이 없습니다.")
+        raise SystemExit(1)
+
+    # 3) 브랜드 / 상품 후보 분리
+    brand_files = [f for f in all_files if "브랜드" in f.name]
+    product_files = [f for f in all_files if "상품" in f.name]
+
+    print(f"- 브랜드 후보 파일 수 : {len(brand_files)}")
+    print(f"- 상품 후보 파일 수  : {len(product_files)}")
+
+    test_brand = brand_files[:2]
+    test_product = product_files[:2]
+
+    print("\n브랜드 테스트 대상 (최대 2개):")
+    for f in test_brand:
+        print(f"  - {f.name}")
+
+    print("\n상품 테스트 대상 (최대 2개):")
+    for f in test_product:
+        print(f"  - {f.name}")
+
+    # 4) 실제 업로드 실행 (바로 진행, y/n 질문 없음)
+    test_files = test_brand + test_product
+    if not test_files:
+        print("✗ 테스트 대상으로 선택된 파일이 없습니다.")
+        raise SystemExit(1)
+
+    print("\n선택된 파일들에 대해 업로드를 바로 진행합니다.\n")
+
+    upload_promotions(
+        output_files=[str(p) for p in test_files],
+        output_dir=str(output_dir),
+        email=BEEFLOW_EMAIL,
+        password=BEEFLOW_PASSWORD,
+    )

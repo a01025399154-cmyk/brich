@@ -16,31 +16,54 @@ from modules.excel import generate_upload_files
 from modules.uploader import upload_promotions
 
 
-def main():
-    """메인 실행 함수 - 인터랙티브 모드"""
+def select_sheet_name():
+    """
+    구글 스프레드시트에서 사용할 시트를 한 번 선택하고,
+    시트 제목을 반환한다.
+
+    메뉴 3번(상품 + 브랜드 통합 실행)에서만 사용.
+    """
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+    creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
+    client = gspread.authorize(creds)
+
+    if "/d/" not in config.GOOGLE_SHEET_URL:
+        raise ValueError("GOOGLE_SHEET_URL에서 스프레드시트 ID를 찾을 수 없습니다.")
+
+    sheet_id = config.GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0]
+    spreadsheet = client.open_by_key(sheet_id)
+
+    worksheets = spreadsheet.worksheets()
+
+    print("\n" + "=" * 60)
+    print("📋 사용 가능한 시트 목록")
     print("=" * 60)
-    print("프로모션 자동화")
+    for idx, ws in enumerate(worksheets, start=1):
+        print(f"{idx}. {ws.title}")
     print("=" * 60)
-    print("1. 상품 프로모션")
-    print("2. 브랜드 프로모션")
-    print("=" * 60)
-    
+
     while True:
-        choice = input("\n선택 (1-2): ").strip()
-        
-        if choice == "1":
-            print("\n✅ 상품 프로모션을 선택했습니다.\n")
-            run_product_promotion()
-            break
-        elif choice == "2":
-            print("\n✅ 브랜드 프로모션을 선택했습니다.\n")
-            run_brand_promotion()
-            break
+        choice = input(f"\n시트 번호를 선택하세요 (1-{len(worksheets)}): ").strip()
+        if not choice.isdigit():
+            print("숫자를 입력해주세요.")
+            continue
+
+        idx = int(choice)
+        if 1 <= idx <= len(worksheets):
+            selected_ws = worksheets[idx - 1]
+            print(f"\n✅ '{selected_ws.title}' 시트를 선택했습니다.\n")
+            return selected_ws.title
         else:
-            print("❌ 1 또는 2를 입력해주세요.")
+            print(f"1에서 {len(worksheets)} 사이의 번호를 입력해주세요.")
 
 
-def run_product_promotion():
+def run_product_promotion(sheet_name=None):
     """상품 프로모션 실행"""
     print("=" * 60)
     print("상품 프로모션 자동화 시작")
@@ -48,35 +71,48 @@ def run_product_promotion():
     print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     api_client = None
-    selected_sheet_name = None
+    selected_sheet_name = sheet_name  # 통합 실행(3번)일 경우 이미 결정된 시트명
 
     try:
         # Step 1: 구글 시트 읽기 (K~R열)
         print("[1/5] 구글 시트 데이터 읽기 (K~R열)...")
-        df_input = read_sheet(
-            config.GOOGLE_SHEET_URL,
-            config.GOOGLE_CREDENTIALS_PATH,
-            column_range="K:R",
-            column_mapping=config.PRODUCT_COLUMNS,
-            interactive=True
-        )
-        
-        # 선택된 시트 이름 저장
-        if 'gid=' in config.GOOGLE_SHEET_URL:
-            import gspread
-            from google.oauth2.service_account import Credentials
-            scopes = [
-                'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/drive'
-            ]
-            creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
-            client = gspread.authorize(creds)
-            sheet_id = config.GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0]
-            spreadsheet = client.open_by_key(sheet_id)
-            gid = config.GOOGLE_SHEET_URL.split('gid=')[1].split('&')[0].split('#')[0]
-            worksheet = spreadsheet.get_worksheet_by_id(int(gid))
-            selected_sheet_name = worksheet.title
-        
+
+        if sheet_name:
+            # ✅ 통합 실행(3번): 이미 선택한 시트명으로 바로 읽기
+            df_input = read_sheet(
+                config.GOOGLE_SHEET_URL,
+                config.GOOGLE_CREDENTIALS_PATH,
+                column_range="K:R",
+                column_mapping=config.PRODUCT_COLUMNS,
+                interactive=False,
+                sheet_name=sheet_name
+            )
+        else:
+            # ✅ 단독 실행(1번): 기존처럼 read_sheet가 인터랙티브로 시트 선택
+            df_input = read_sheet(
+                config.GOOGLE_SHEET_URL,
+                config.GOOGLE_CREDENTIALS_PATH,
+                column_range="K:R",
+                column_mapping=config.PRODUCT_COLUMNS,
+                interactive=True
+            )
+
+            # 선택된 시트 이름 저장 (기존 로직 유지 – URL에 gid가 있을 때만)
+            if 'gid=' in config.GOOGLE_SHEET_URL:
+                import gspread
+                from google.oauth2.service_account import Credentials
+                scopes = [
+                    'https://www.googleapis.com/auth/spreadsheets',
+                    'https://www.googleapis.com/auth/drive'
+                ]
+                creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
+                client = gspread.authorize(creds)
+                sheet_id = config.GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0]
+                spreadsheet = client.open_by_key(sheet_id)
+                gid = config.GOOGLE_SHEET_URL.split('gid=')[1].split('&')[0].split('#')[0]
+                worksheet = spreadsheet.get_worksheet_by_id(int(gid))
+                selected_sheet_name = worksheet.title
+
         print(f"✓ {len(df_input)}개 행 읽음\n")
 
         # Step 2: 비플로우 채널 정보 조회 (내부 API)
@@ -117,7 +153,6 @@ def run_product_promotion():
                         output_dir=config.OUTPUT_DIR,
                         email=config.BEEFLOW_EMAIL,
                         password=config.BEEFLOW_PASSWORD,
-                        promotion_type="product"
                     )
                     upload_success = True
                 except Exception as e:
@@ -167,42 +202,56 @@ def run_product_promotion():
         sys.exit(1)
 
 
-def run_brand_promotion():
+def run_brand_promotion(sheet_name=None):
     """브랜드 프로모션 실행"""
     print("=" * 60)
     print("브랜드 프로모션 자동화 시작")
     print("=" * 60)
     print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    selected_sheet_name = None
+    selected_sheet_name = sheet_name  # 통합 실행(3번)일 경우 이미 결정된 시트명
 
     try:
         # Step 1: 구글 시트 읽기 (A~I열)
         print("[1/4] 구글 시트 데이터 읽기 (A~I열)...")
-        df_input = read_sheet(
-            config.GOOGLE_SHEET_URL,
-            config.GOOGLE_CREDENTIALS_PATH,
-            column_range="A:I",
-            column_mapping=config.BRAND_COLUMNS,
-            start_row=3,  # 브랜드는 3행부터 시작
-            interactive=True
-        )
-        
-        # 선택된 시트 이름 저장
-        if 'gid=' in config.GOOGLE_SHEET_URL:
-            import gspread
-            from google.oauth2.service_account import Credentials
-            scopes = [
-                'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/drive'
-            ]
-            creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
-            client = gspread.authorize(creds)
-            sheet_id = config.GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0]
-            spreadsheet = client.open_by_key(sheet_id)
-            gid = config.GOOGLE_SHEET_URL.split('gid=')[1].split('&')[0].split('#')[0]
-            worksheet = spreadsheet.get_worksheet_by_id(int(gid))
-            selected_sheet_name = worksheet.title
+
+        if sheet_name:
+            # ✅ 통합 실행(3번): 이미 선택한 시트명으로 바로 읽기
+            df_input = read_sheet(
+                config.GOOGLE_SHEET_URL,
+                config.GOOGLE_CREDENTIALS_PATH,
+                column_range="A:I",
+                column_mapping=config.BRAND_COLUMNS,
+                start_row=3,  # 브랜드는 3행부터 시작
+                interactive=False,
+                sheet_name=sheet_name
+            )
+        else:
+            # ✅ 단독 실행(2번): 기존처럼 read_sheet가 인터랙티브로 시트 선택
+            df_input = read_sheet(
+                config.GOOGLE_SHEET_URL,
+                config.GOOGLE_CREDENTIALS_PATH,
+                column_range="A:I",
+                column_mapping=config.BRAND_COLUMNS,
+                start_row=3,  # 브랜드는 3행부터 시작
+                interactive=True
+            )
+            
+            # 선택된 시트 이름 저장 (URL에 gid가 있을 때만)
+            if 'gid=' in config.GOOGLE_SHEET_URL:
+                import gspread
+                from google.oauth2.service_account import Credentials
+                scopes = [
+                    'https://www.googleapis.com/auth/spreadsheets',
+                    'https://www.googleapis.com/auth/drive'
+                ]
+                creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_PATH, scopes=scopes)
+                client = gspread.authorize(creds)
+                sheet_id = config.GOOGLE_SHEET_URL.split('/d/')[1].split('/')[0]
+                spreadsheet = client.open_by_key(sheet_id)
+                gid = config.GOOGLE_SHEET_URL.split('gid=')[1].split('&')[0].split('#')[0]
+                worksheet = spreadsheet.get_worksheet_by_id(int(gid))
+                selected_sheet_name = worksheet.title
         
         print(f"✓ {len(df_input)}개 행 읽음\n")
 
@@ -234,7 +283,6 @@ def run_brand_promotion():
                         output_dir=config.OUTPUT_DIR,
                         email=config.BEEFLOW_EMAIL,
                         password=config.BEEFLOW_PASSWORD,
-                        promotion_type="brand"
                     )
                     upload_success = True
                 except Exception as e:
@@ -283,6 +331,46 @@ def run_brand_promotion():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+
+def main():
+    """메인 실행 함수 - 인터랙티브 모드"""
+    print("=" * 60)
+    print("프로모션 자동화")
+    print("=" * 60)
+    print("1. 상품 프로모션")
+    print("2. 브랜드 프로모션")
+    print("3. 상품 + 브랜드 모두 실행")
+    print("=" * 60)
+    
+    while True:
+        choice = input("\n선택 (1-3): ").strip()
+        
+        if choice == "1":
+            print("\n✅ 상품 프로모션을 선택했습니다.\n")
+            run_product_promotion()
+            break
+
+        elif choice == "2":
+            print("\n✅ 브랜드 프로모션을 선택했습니다.\n")
+            run_brand_promotion()
+            break
+
+        elif choice == "3":
+            print("\n✅ 상품 + 브랜드 프로모션을 순차적으로 실행합니다.\n")
+
+            # ✅ 여기서 시트를 한 번만 선택해서 두 단계 모두에 사용
+            sheet_name = select_sheet_name()
+
+            print("\n[🔹 1단계] 상품 프로모션 실행\n")
+            run_product_promotion(sheet_name=sheet_name)
+
+            print("\n[🔹 2단계] 브랜드 프로모션 실행\n")
+            run_brand_promotion(sheet_name=sheet_name)
+            break
+
+        else:
+            print("❌ 1, 2 또는 3을 입력해주세요.")
 
 
 if __name__ == "__main__":

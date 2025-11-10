@@ -1,11 +1,13 @@
 """
-상품 채널 조회 API 모듈
+상품 채널 조회 API 모듈 (리팩토링)
 비플로우 내부 API를 사용하여 상품별 채널 정보 조회
+CHANNEL_MASTER 기반으로 채널명 변환
 """
 
 import time
 from typing import Dict, List, Optional
 import requests
+import config
 
 
 class ProductAPIClient:
@@ -103,7 +105,7 @@ class ProductAPIClient:
             if not ch_id or ch_id in ["-", "None", "null", "없음"]:
                 continue
 
-            # API 키를 표준 채널명으로 변환
+            # API 키를 표준 채널명으로 변환 (CHANNEL_MASTER 사용)
             standard_name = self._api_key_to_standard(api_key)
             if standard_name:
                 mapping[standard_name] = ch_id
@@ -112,54 +114,23 @@ class ProductAPIClient:
 
     def _api_key_to_standard(self, api_key: str) -> Optional[str]:
         """
-        API 채널 키 → 표준 채널명 변환
+        API 채널 키 → 표준 채널명 변환 (CHANNEL_MASTER 기반)
         
         Args:
             api_key: API 채널 키 (예: "ssg", "gmarket", "coupang")
         
         Returns:
-            표준 채널명
+            표준 채널명 (매칭 실패시 None)
         """
         if not api_key:
             return None
 
-        # API 키 → 표준명 매핑 (실제 존재하는 것만)
-        mapping = {
-            "11st": "11번가",
-            "akmall": "AK몰",
-            "aliexpress": "알리익스프레스",
-            "auction": "옥션",
-            "cafe24": "카페24",
-            "cjmall": "CJ몰",
-            "coupang": "쿠팡",
-            "globalauction": "글로벌 옥션",
-            "globalgmarket": "글로벌 지마켓",
-            "globalnaversmartstore": "글로벌 네이버스마트스토어",
-            "gmarket": "지마켓",
-            "gsshop": "GS Shop",
-            "hmall": "Hmall",
-            "hnsmall": "홈앤쇼핑",
-            "hwahae": "화해",
-            "kakaostyle": "카카오스타일",
-            "kakaotalkgift": "카카오 선물하기",
-            "kakaotalkshopping": "카카오 쇼핑하기",
-            "lotte": "롯데ON",
-            "lotteimall": "롯데i몰",
-            "musinsa": "무신사",
-            "naverplusstore": "네이버플러스스토어",
-            "naversmartstore": "네이버스마트스토어",
-            "newhalfclub": "Halfclub",
-            "qoo10": "큐텐",
-            "queenit": "퀸잇",
-            "rocketgrowth": "로켓그로스",
-            "sabangnet": "사방넷",
-            "shein": "쉬인",
-            "ssg": "SSG",
-            "temu": "테무",
-            "wemakeprice": "위메프",
-        }
-
-        return mapping.get(api_key.strip().lower())
+        # CHANNEL_MASTER에서 api_key로 검색
+        for standard, info in config.CHANNEL_MASTER.items():
+            if api_key.strip().lower() == info["api_key"].lower():
+                return standard
+        
+        return None
 
 
 if __name__ == "__main__":

@@ -1,20 +1,6 @@
 """
-비플로우 상품 채널 정보 스크래핑 모듈 (최종 버전)
-
-주요 기능:
-- 비플로우 웹사이트에서 상품의 외부 채널 연동 정보 추출
-- 배치 검색으로 여러 상품을 한 번에 처리
-- 32개 외부 채널 지원 (지마켓, 옥션, 네이버스마트스토어 등)
-
-사용 방법:
-    scraper = ProductWebScraper(headless=False)
-    scraper.login(email, password)
-    results = scraper.scrape_products([상품번호1, 상품번호2, ...])
-    scraper.close()
-
-주의사항:
-- 구식 시스템이므로 각 단계마다 충분한 대기시간 필요
-- 페이지는 https://b-flow.co.kr/products/new#/ 에서만 작업
+비플로우 상품 채널 정보 스크래핑 모듈 (리팩토링)
+CHANNEL_MASTER 기반 채널 순서 및 변환
 """
 
 import time
@@ -24,21 +10,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import config
 
 
 class ProductWebScraper:
     """비플로우 웹페이지에서 상품 채널 정보 스크래핑"""
     
     BASE_URL = "https://b-flow.co.kr/products/new#/"
-    
-    # 채널 순서 (HTML 테이블 컬럼 순서와 동일)
-    CHANNEL_ORDER = [
-        "SSG", "지마켓", "옥션", "11번가", "쿠팡", "위메프", "GS Shop", "롯데ON",
-        "AK몰", "CJ몰", "Halfclub", "롯데i몰", "네이버스마트스토어", "글로벌 지마켓",
-        "글로벌 옥션", "카페24", "화해", "무신사", "알리익스프레스", "큐텐", "쉬인",
-        "카카오 선물하기", "카카오 쇼핑하기", "글로벌 네이버스마트스토어", "카카오스타일",
-        "사방넷", "Hmall", "네이버플러스스토어", "퀸잇", "홈앤쇼핑", "로켓그로스", "테무"
-    ]
     
     def __init__(
         self,
@@ -57,25 +35,16 @@ class ProductWebScraper:
         self.batch_size = batch_size
         self.headless = headless
 
-        # CHANNEL_ORDER를 인스턴스 속성으로도 보장
-        if hasattr(self, "CHANNEL_ORDER"):
-            # 클래스 속성이 있으면 그 값을 인스턴스로 복사
-            self.CHANNEL_ORDER = type(self).CHANNEL_ORDER
-        else:
-            # 혹시 모를 상황 대비 (인덴트 깨짐 등)
-            self.CHANNEL_ORDER = [
-                "SSG", "지마켓", "옥션", "11번가", "쿠팡", "위메프", "GS Shop", "롯데ON",
-                "AK몰", "CJ몰", "Halfclub", "롯데i몰", "네이버스마트스토어", "글로벌 지마켓",
-                "글로벌 옥션", "카페24", "화해", "무신사", "알리익스프레스", "큐텐", "쉬인",
-                "카카오 선물하기", "카카오 쇼핑하기", "글로벌 네이버스마트스토어", "카카오스타일",
-                "사방넷", "Hmall", "네이버플러스스토어", "퀸잇", "홈앤쇼핑", "로켓그로스", "테무"
-            ]
+        # CHANNEL_MASTER에서 html_name 순서대로 CHANNEL_ORDER 생성
+        self.CHANNEL_ORDER = [
+            info["html_name"] 
+            for standard, info in config.CHANNEL_MASTER.items()
+        ]
 
         if self.driver is None:
             self.should_close_driver = True
             self._init_driver()
         else:
-            # 외부에서 전달된 드라이버를 쓰는 경우에도 wait 세팅
             self.wait = WebDriverWait(self.driver, 20)
 
     def _init_driver(self):
@@ -103,44 +72,32 @@ class ProductWebScraper:
         try:
             # 로그인 버튼 클릭
             login_btn = self.wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), '로그인')]"))
+                EC.element_to_be_clickable((By.CSS_SELECTOR, ".navbar-right .btn-login"))
             )
-            self.driver.execute_script("arguments[0].click();", login_btn)
+            login_btn.click()
+            time.sleep(2)
             
             # 이메일 입력
             email_input = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "input[type='email']"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input#user_email"))
             )
+            email_input.clear()
             email_input.send_keys(email)
             
             # 비밀번호 입력
-            password_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-            password_input.send_keys(password)
+            pw_input = self.driver.find_element(By.CSS_SELECTOR, "input#user_password")
+            pw_input.clear()
+            pw_input.send_keys(password)
             
             # 로그인 실행
-            submit_btn = self.driver.find_element(
-                By.CSS_SELECTOR, ".modal .login-btn, .v--modal .login-btn"
-            )
-            self.driver.execute_script("arguments[0].click();", submit_btn)
-            
-            # 로그인 완료 대기
+            submit_btn = self.driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
+            submit_btn.click()
             time.sleep(3)
             
-            # 현재 URL 확인 및 필요시 BASE_URL로 이동
+            # 로그인 성공 확인
             current_url = self.driver.current_url
-            if "products/new" not in current_url:
-                print(f"  현재 URL: {current_url}")
-                print(f"  → {self.BASE_URL}로 이동")
-                self.driver.get(self.BASE_URL)
-                time.sleep(2)
-            
-            # 검색 폼이 로드될 때까지 대기
-            self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".search-form"))
-            )
-            
-            print("  ✓ 로그인 완료")
-            print(f"  현재 URL: {self.driver.current_url}")
+            print(f"  ✓ 로그인 완료")
+            print(f"  현재 URL: {current_url}")
             
         except Exception as e:
             print(f"  ✗ 로그인 실패: {e}")
@@ -148,151 +105,80 @@ class ProductWebScraper:
     
     def scrape_products(self, product_ids: List[int]) -> Dict[int, Dict[str, str]]:
         """
-        여러 상품의 채널 정보 스크래핑 (배치 검색 사용)
-        BASE_URL에서 벗어나지 않고 모든 작업 수행
+        여러 상품의 채널 정보를 배치로 스크래핑
         
         Args:
             product_ids: BRICH 상품번호 리스트
         
         Returns:
-            {상품번호: {채널명: 채널상품번호}} 딕셔너리
+            {상품번호: {표준_채널명: 채널상품번호}} 딕셔너리
         """
-        results = {}
-        total = len(product_ids)
+        results = {pid: {} for pid in product_ids}
         
-        # 배치 단위로 처리
-        for batch_start in range(0, total, self.batch_size):
-            batch_end = min(batch_start + self.batch_size, total)
-            batch = product_ids[batch_start:batch_end]
-            
-            print(f"  [웹 스크래핑] 배치 [{batch_start+1}-{batch_end}/{total}] 처리 중...")
-            
-            try:
-                batch_results = self._scrape_batch(batch)
-                results.update(batch_results)
-                
-                success_count = sum(1 for v in batch_results.values() if v)
-                print(f"    ✓ 배치 완료: {success_count}/{len(batch)}개 성공")
-                
-            except Exception as e:
-                print(f"    ✗ 배치 처리 실패: {e}")
-                # 개별 처리로 폴백
-                for product_id in batch:
-                    try:
-                        channels = self._scrape_single_search(product_id)
-                        results[product_id] = channels
-                    except Exception:
-                        results[product_id] = {}
+        # 배치로 나누어 처리
+        for i in range(0, len(product_ids), self.batch_size):
+            batch = product_ids[i:i + self.batch_size]
+            batch_results = self._scrape_batch(batch)
+            results.update(batch_results)
         
         return results
     
     def _scrape_batch(self, product_ids: List[int]) -> Dict[int, Dict[str, str]]:
         """
-        여러 상품을 한 번에 검색 (BASE_URL에서 동적 검색)
+        배치 단위로 상품 검색 및 스크래핑
         
         Args:
-            product_ids: 상품번호 리스트
+            product_ids: 배치 상품번호 리스트
         
         Returns:
-            {상품번호: {채널명: 채널상품번호}} 딕셔너리
+            {상품번호: {표준_채널명: 채널상품번호}} 딕셔너리
         """
+        print(f"  [웹 스크래핑] 배치 [{product_ids[0]}-{product_ids[-1]}/{len(product_ids)}] 처리 중...")
+        
         try:
-            # 1. 검색 타입이 '상품번호'인지 확인 및 설정
+            # 검색 타입 선택
             self._select_search_type("상품번호")
             
-            # 2. 검색어 입력창에 여러 상품번호를 띄어쓰기로 구분하여 입력
-            search_query = " ".join(str(pid) for pid in product_ids)
-            
+            # 상품번호 입력 (띄어쓰기로 구분)
             search_input = self.driver.find_element(
                 By.CSS_SELECTOR, ".br-text-wrapper input[type='text']"
             )
             search_input.clear()
+            search_query = " ".join(str(pid) for pid in product_ids)
             search_input.send_keys(search_query)
-            time.sleep(0.5)
+            search_input.send_keys(Keys.RETURN)
             
-            # 3. 검색 버튼 클릭
-            search_btn = self.driver.find_element(
-                By.XPATH, "//button[contains(@class, 'br-btn-purple')]//span[text()='검색']"
-            )
-            self.driver.execute_script("arguments[0].click();", search_btn)
-            
-            # 4. 검색 결과가 동적으로 렌더링될 때까지 대기
             time.sleep(3)
             
-            # 테이블이 업데이트될 때까지 대기
-            try:
-                self.wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "tbody tr"))
-                )
-            except Exception:
-                print("    ⚠️ 검색 결과 로딩 타임아웃")
-                return {pid: {} for pid in product_ids}
-            
-            # 5. 현재 페이지(BASE_URL)에서 나타난 테이블 결과 파싱
             print(f"    검색 후 URL: {self.driver.current_url}")
-            return self._parse_table_rows(product_ids)
+            
+            # 테이블 파싱
+            results = self._parse_table_rows(product_ids)
+            
+            success_count = sum(1 for channels in results.values() if channels)
+            print(f"    ✓ 배치 완료: {success_count}/{len(product_ids)}개 성공")
+            
+            return results
             
         except Exception as e:
-            print(f"    ✗ 배치 검색 실패: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"    ✗ 배치 처리 실패: {e}")
             return {pid: {} for pid in product_ids}
     
-    def _select_search_type(self, search_type: str = "상품번호"):
+    def _select_search_type(self, search_type: str):
         """
-        검색 타입 선택 (상품번호, 상품명 등)
-        구식 시스템이므로 각 단계마다 충분한 대기시간 필요
+        검색 타입 드롭다운 선택 (예: "상품번호")
         
         Args:
-            search_type: 선택할 검색 타입 (기본값: "상품번호")
+            search_type: 검색 타입 (상품명, 상품번호 등)
         """
         try:
-            # 1. multiselect 요소 찾기
-            time.sleep(1)  # 페이지 안정화 대기
-            
-            multiselect_wrapper = self.wait.until(
-                EC.presence_of_element_located((
-                    By.CSS_SELECTOR, 
-                    ".form-text-group .multiselect.br-select"
-                ))
+            # 드롭다운 클릭
+            dropdown = self.wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, ".form-text-group .multiselect"))
             )
+            dropdown.click()
             
-            # 2. 요소를 화면 중앙으로 스크롤
-            self.driver.execute_script(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", 
-                multiselect_wrapper
-            )
-            time.sleep(1.5)
-            
-            # 3. wrapper 클릭하여 드롭다운 열기
-            try:
-                multiselect_wrapper.click()
-            except Exception:
-                # 일반 클릭 실패 시 JavaScript 클릭
-                self.driver.execute_script("arguments[0].click();", multiselect_wrapper)
-            
-            time.sleep(2)  # 구식 시스템 - 드롭다운 열릴 때까지 대기
-            
-            # 4. 드롭다운이 열렸는지 확인
-            dropdown = multiselect_wrapper.find_element(By.CSS_SELECTOR, ".multiselect__content-wrapper")
-            style = dropdown.get_attribute("style")
-            
-            if "display: none" in style or "display:none" in style:
-                # 추가 시도: input 직접 클릭
-                input_elem = multiselect_wrapper.find_element(By.CSS_SELECTOR, "input.multiselect__input")
-                try:
-                    input_elem.click()
-                except Exception:
-                    self.driver.execute_script("arguments[0].click();", input_elem)
-                
-                time.sleep(2)
-                style = dropdown.get_attribute("style")
-                
-                if "display: none" in style:
-                    print(f"    ⚠️ 드롭다운 열기 실패 - 기본값 사용")
-                    return
-            
-            # 5. 옵션 선택
+            # 옵션 선택
             time.sleep(1)
             option_xpath = f"//div[contains(@class, 'form-text-group')]//span[contains(@class, 'multiselect__option')]/span[text()='{search_type}']"
             
@@ -320,7 +206,7 @@ class ProductWebScraper:
             expected_product_ids: 검색한 상품번호 리스트
         
         Returns:
-            {상품번호: {채널명: 채널상품번호}} 딕셔너리
+            {상품번호: {표준_채널명: 채널상품번호}} 딕셔너리
         """
         results = {pid: {} for pid in expected_product_ids}
         
@@ -355,9 +241,12 @@ class ProductWebScraper:
             print(f"    ✗ 테이블 파싱 실패: {e}")
             return results
     
-    def _parse_single_row(self, row) -> tuple[int, Dict[str, str]]:
+    def _parse_single_row(self, row) -> tuple:
         """
         테이블 한 행에서 상품번호와 채널 정보 추출
+        
+        Returns:
+            (상품번호, {표준_채널명: 채널상품번호})
         """
         cells = row.find_elements(By.TAG_NAME, "td")
         
@@ -380,7 +269,7 @@ class ProductWebScraper:
         channels = {}
         channel_start_idx = 57
         
-        for idx, channel_name in enumerate(self.CHANNEL_ORDER):
+        for idx, html_channel_name in enumerate(self.CHANNEL_ORDER):
             cell_index = channel_start_idx + idx
             
             if cell_index >= len(cells):
@@ -403,178 +292,42 @@ class ProductWebScraper:
                     clean = line.replace(' ', '').replace('-', '')
                     
                     if clean.isdigit() and len(clean) >= 8:
-                        channels[channel_name] = clean
+                        # HTML 채널명 → 표준 채널명 변환
+                        standard_name = config.get_standard_channel_name(html_channel_name)
+                        channels[standard_name] = clean
                         break
             except:
                 continue
         
         return product_id, channels
-
-    def _extract_channel_id_from_cell(self, cell) -> str:
-        """
-        셀에서 채널 상품번호 추출 (구조 독립적)
-        
-        원리:
-        - 셀의 모든 텍스트를 줄바꿈으로 분리
-        - 각 줄에서 한글/라벨 제거
-        - 8자 이상 순수 숫자를 찾으면 반환
-        - 여러 개면 첫 번째 반환 (상품번호 우선)
-        
-        Args:
-            cell: 테이블 셀 WebElement
-        
-        Returns:
-            채널 상품번호 (없으면 None)
-        """
-        # 셀의 전체 텍스트 가져오기
-        cell_text = cell.text
-        
-        if not cell_text:
-            return None
-        
-        # 줄바꿈으로 분리
-        lines = cell_text.split('\n')
-        
-        for line in lines:
-            # 공백 제거
-            line = line.strip()
-            
-            if not line:
-                continue
-            
-            # 한글이 있으면 라벨이므로 스킵
-            if any('\uAC00' <= c <= '\uD7A3' for c in line):
-                continue
-            
-            # 영문자가 있으면 라벨이므로 스킵 (예: "상품번호", "Master")
-            if any(c.isalpha() for c in line):
-                continue
-            
-            # 순수 숫자만 추출 (공백, 쉼표 제거)
-            clean = line.replace(' ', '').replace(',', '').replace('-', '')
-            
-            # 8자 이상 숫자면 채널 상품번호
-            if clean.isdigit() and len(clean) >= 8:
-                return clean
-        
-        return None
-    
-    def _scrape_single_search(self, product_id: int) -> Dict[str, str]:
-        """
-        단일 상품 검색 (폴백용 - BASE_URL에서 검색)
-        
-        Args:
-            product_id: BRICH 상품번호
-        
-        Returns:
-            {채널명: 채널상품번호} 딕셔너리
-        """
-        try:
-            print(f"    [개별 검색] 상품 {product_id}...")
-            
-            # 검색 타입 설정
-            self._select_search_type("상품번호")
-            
-            # 검색어 입력
-            search_input = self.driver.find_element(
-                By.CSS_SELECTOR, ".br-text-wrapper input[type='text']"
-            )
-            search_input.clear()
-            search_input.send_keys(str(product_id))
-            time.sleep(0.5)
-            
-            # 검색 버튼 클릭
-            search_btn = self.driver.find_element(
-                By.XPATH, "//button[contains(@class, 'br-btn-purple')]//span[text()='검색']"
-            )
-            self.driver.execute_script("arguments[0].click();", search_btn)
-            
-            # 결과 대기
-            time.sleep(3)
-            
-            # 테이블에서 첫 번째 행 파싱
-            rows = self.driver.find_elements(By.CSS_SELECTOR, "tbody tr")
-            
-            if not rows:
-                return {}
-            
-            _, channels = self._parse_single_row(rows[0])
-            return channels
-            
-        except Exception as e:
-            print(f"    ✗ 개별 검색 실패: {e}")
-            return {}
     
     def close(self):
-        """드라이버 종료"""
+        """리소스 정리"""
         if self.should_close_driver and self.driver:
-            self.driver.quit()
+            try:
+                self.driver.quit()
+            except:
+                pass
 
 
 if __name__ == "__main__":
-    """
-    실제 스크래핑 실행 (추천 배치 크기 사용)
-
-    환경변수:
-    - BFLOW_EMAIL: 비플로우 로그인 이메일
-    - BFLOW_PASSWORD: 비플로우 로그인 비밀번호
-    """
-    import os
-    import time
-
-    # 로그인 정보
-    email = os.getenv("BFLOW_EMAIL", "jsj@brich.co.kr")
-    password = os.getenv("BFLOW_PASSWORD", "young124@")
-
-    # product.html 에서 추출한 상품번호 100개
-    product_ids = [
-        16089817, 103661731, 120020994, 143165393, 159524784, 178079519, 194307326, 216925277, 233415740, 249611675,
-        268068218, 281586726, 290474007, 298044805, 316501348, 330033654, 346360149, 364685620, 484781978, 503074681,
-        519564504, 535891015, 564933621, 581391188, 599716659, 616042642, 632533105, 646631888, 662991295, 677590253,
-        680704091, 695882828, 712373291, 726603146, 759288520, 777745079, 793940502, 867539568, 881802207, 897997758,
-        914488093, 932911356, 947379754, 963739529, 977837928, 994196695, 1012751542, 1074447138, 1090805889, 1141916078,
-        1164697869, 1181032172, 1199357515, 1212868983, 1229194966, 1247782581, 1263978004, 1280337907, 1312293860, 1319864146,
-        1328784195, 1336223537, 1342302831, 1360726990, 1376955309, 1399704332, 1490349927, 1528876036, 1547333091, 1563790658,
-        1578052897, 1594247808, 1611986348, 1634604299, 1651094250, 1667289673, 1685746216, 1702204311, 1707642554, 1724001817,
-        1742557176, 1747711652, 1764038147, 1782364130, 1864193485, 1912085371, 1928575194, 1942673593, 1959032856, 1977588103,
-        1993947494, 2010142405, 2017362401, 2033721664, 2050179375, 2064318094, 2090564880, 2106759935, 2129410654, 2145868349,
-    ]
-
-    # 추천 배치 크기
-    BATCH_SIZE = 20
-
-    print("\n==============================")
-    print(" 비플로우 상품 채널 정보 스크래핑 시작")
-    print("==============================")
-    print(f"- 대상 상품 수: {len(product_ids)}개")
-    print(f"- 배치 크기: {BATCH_SIZE}\n")
-
-    scraper = ProductWebScraper(headless=True, batch_size=BATCH_SIZE)
-
+    # 테스트
+    scraper = ProductWebScraper(headless=False)
+    
     try:
-        scraper.login(email, password)
-
-        start = time.time()
-        results = scraper.scrape_products(product_ids)
-        elapsed = time.time() - start
-
-        # 요약
-        success = sum(1 for v in results.values() if v)
-        print("\n==============================")
-        print(" 스크래핑 완료")
-        print("==============================")
-        print(f"- 채널 정보가 1개 이상 있는 상품 수: {success}/{len(product_ids)}")
-        print(f"- 총 소요 시간: {elapsed:.1f}초\n")
-
-        # 상세 로그 (필요하면 주석 해제)
-        for pid in product_ids:
-            channels = results.get(pid, {})
-            print(f"상품 {pid}:")
+        scraper.login("jsj@brich.co.kr", "young124@")
+        
+        test_products = [986269048, 2103835824]
+        results = scraper.scrape_products(test_products)
+        
+        print("\n=== 스크래핑 결과 (표준명) ===")
+        for product_id, channels in results.items():
+            print(f"상품 {product_id}:")
             if channels:
                 for ch_name, ch_id in channels.items():
                     print(f"  - {ch_name}: {ch_id}")
             else:
                 print("  (채널 정보 없음)")
-
+    
     finally:
         scraper.close()

@@ -16,44 +16,282 @@ BEEFLOW_PASSWORD = "young124@"
 # 출력 디렉토리
 OUTPUT_DIR = "outputs"
 
-# ==================== 통합 채널 매핑 ====================
-# 표준 채널명: [API 키, 웹 스크래핑 채널명, 드롭다운 값들...]
-# 실제로 존재하는 값만 사용
-CHANNEL_NORMALIZATION = {
-    # 표준명: [API 키, 스크래핑 HTML 헤더명, 드롭다운명]
-    "SSG": ["ssg", "SSG"],
-    "지마켓": ["gmarket", "지마켓"],
-    "옥션": ["auction", "옥션"],
-    "11번가": ["11st", "11번가"],
-    "쿠팡": ["coupang", "쿠팡"],
-    "위메프": ["wemakeprice", "위메프"],
-    "GS Shop": ["gsshop", "GS샵"],  # 웹은 "GS샵", 드롭다운은 "GS샵"
-    "롯데ON": ["lotte", "롯데ON"],
-    "AK몰": ["akmall", "AK몰"],
-    "CJ몰": ["cjmall", "CJ몰"],
-    "Halfclub": ["newhalfclub", "Halfclub", "하프클럽", "하프클럽(신규)"],
-    "롯데i몰": ["lotteimall", "롯데i몰"],
-    "네이버스마트스토어": ["naversmartstore", "네이버스마트스토어"],
-    "글로벌 지마켓": ["globalgmarket", "글로벌 지마켓"],
-    "글로벌 옥션": ["globalauction", "글로벌 옥션"],
-    "카페24": ["cafe24", "카페24"],
-    "화해": ["hwahae", "화해"],
-    "무신사": ["musinsa", "무신사"],
-    "알리익스프레스": ["aliexpress", "알리익스프레스"],
-    "큐텐": ["qoo10", "큐텐"],
-    "쉬인": ["shein", "쉬인"],
-    "카카오 선물하기": ["kakaotalkgift", "카카오 선물하기"],
-    "카카오 쇼핑하기": ["kakaotalkshopping", "카카오 쇼핑하기", "카카오쇼핑"],
-    "글로벌 네이버스마트스토어": ["globalnaversmartstore", "글로벌 네이버스마트스토어"],
-    "카카오스타일": ["kakaostyle", "카카오스타일"],
-    "사방넷": ["sabangnet", "사방넷"],
-    "Hmall": ["hmall", "Hmall", "H몰"],
-    "네이버플러스스토어": ["naverplusstore", "네이버플러스스토어"],
-    "퀸잇": ["queenit", "퀸잇"],
-    "홈앤쇼핑": ["hnsmall", "홈앤쇼핑"],
-    "로켓그로스": ["rocketgrowth", "로켓그로스"],
-    "테무": ["temu", "테무"],
+# ==================== 채널 마스터 (단일 진실 소스) ====================
+CHANNEL_MASTER = {
+    # 표준명: 채널 메타데이터
+    "SSG": {
+        "dropdown_name": "SSG",
+        "api_key": "ssg",
+        "html_name": "SSG",
+        "uploader_name": "ssg",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "지마켓": {
+        "dropdown_name": "지마켓",
+        "api_key": "gmarket",
+        "html_name": "지마켓",
+        "uploader_name": "gmarket",
+        "enabled_product": True,
+        "enabled_brand": False,
+    },
+    "옥션": {
+        "dropdown_name": "옥션",
+        "api_key": "auction",
+        "html_name": "옥션",
+        "uploader_name": "auction",
+        "enabled_product": True,
+        "enabled_brand": False,
+    },
+    "11번가": {
+        "dropdown_name": "11번가",
+        "api_key": "11st",
+        "html_name": "11번가",
+        "uploader_name": "11st",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "쿠팡": {
+        "dropdown_name": "쿠팡",
+        "api_key": "coupang",
+        "html_name": "쿠팡",
+        "uploader_name": "coupang",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "위메프": {
+        "dropdown_name": "위메프",
+        "api_key": "wemakeprice",
+        "html_name": "위메프",
+        "uploader_name": "wemakeprice",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "GS Shop": {
+        "dropdown_name": "GS샵",
+        "api_key": "gsshop",
+        "html_name": "GS Shop",
+        "uploader_name": "gsshop",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "롯데ON": {
+        "dropdown_name": "롯데온",
+        "api_key": "lotte",
+        "html_name": "롯데ON",
+        "uploader_name": "lotte",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "AK몰": {
+        "dropdown_name": "AK몰",
+        "api_key": "akmall",
+        "html_name": "AK몰",
+        "uploader_name": "akmall",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "CJ몰": {
+        "dropdown_name": "CJ몰",
+        "api_key": "cjmall",
+        "html_name": "CJ몰",
+        "uploader_name": "cjmall",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "Halfclub": {
+        "dropdown_name": "하프클럽",
+        "api_key": "newhalfclub",
+        "html_name": "Halfclub",
+        "uploader_name": "newhalfclub",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "롯데i몰": {
+        "dropdown_name": "롯데i몰",
+        "api_key": "lotteimall",
+        "html_name": "롯데i몰",
+        "uploader_name": "lotteimall",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "네이버스마트스토어": {
+        "dropdown_name": "네이버스마트스토어",
+        "api_key": "naversmartstore",
+        "html_name": "네이버스마트스토어",
+        "uploader_name": "naversmartstore",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "글로벌 지마켓": {
+        "dropdown_name": "글로벌 지마켓",
+        "api_key": "globalgmarket",
+        "html_name": "글로벌 지마켓",
+        "uploader_name": "globalgmarket",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "글로벌 옥션": {
+        "dropdown_name": "글로벌 옥션",
+        "api_key": "globalauction",
+        "html_name": "글로벌 옥션",
+        "uploader_name": "globalauction",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "카페24": {
+        "dropdown_name": "카페24",
+        "api_key": "cafe24",
+        "html_name": "카페24",
+        "uploader_name": "cafe24",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "화해": {
+        "dropdown_name": "화해",
+        "api_key": "hwahae",
+        "html_name": "화해",
+        "uploader_name": "hwahae",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "무신사": {
+        "dropdown_name": "무신사",
+        "api_key": "musinsa",
+        "html_name": "무신사",
+        "uploader_name": "musinsa",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "알리익스프레스": {
+        "dropdown_name": "알리익스프레스",
+        "api_key": "aliexpress",
+        "html_name": "알리익스프레스",
+        "uploader_name": "aliexpress",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "큐텐": {
+        "dropdown_name": "큐텐",
+        "api_key": "qoo10",
+        "html_name": "큐텐",
+        "uploader_name": "qoo10",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "쉬인": {
+        "dropdown_name": "쉬인",
+        "api_key": "shein",
+        "html_name": "쉬인",
+        "uploader_name": "shein",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "카카오 선물하기": {
+        "dropdown_name": "카카오 선물하기",
+        "api_key": "kakaotalkgift",
+        "html_name": "카카오 선물하기",
+        "uploader_name": "kakaotalkgift",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "카카오 쇼핑하기": {
+        "dropdown_name": "카카오쇼핑",
+        "api_key": "kakaotalkshopping",
+        "html_name": "카카오 쇼핑하기",
+        "uploader_name": "kakaotalkshopping",
+        "enabled_product": True,
+        "enabled_brand": False,
+    },
+    "글로벌 네이버스마트스토어": {
+        "dropdown_name": "글로벌 네이버스마트스토어",
+        "api_key": "globalnaversmartstore",
+        "html_name": "글로벌 네이버스마트스토어",
+        "uploader_name": "globalnaversmartstore",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "카카오스타일": {
+        "dropdown_name": "카카오스타일",
+        "api_key": "kakaostyle",
+        "html_name": "카카오스타일",
+        "uploader_name": "kakaostyle",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "사방넷": {
+        "dropdown_name": "사방넷",
+        "api_key": "sabangnet",
+        "html_name": "사방넷",
+        "uploader_name": "sabangnet",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "Hmall": {
+        "dropdown_name": "Hmall",
+        "api_key": "hmall",
+        "html_name": "Hmall",
+        "uploader_name": "hmall",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "네이버플러스스토어": {
+        "dropdown_name": "네이버플러스스토어",
+        "api_key": "naverplusstore",
+        "html_name": "네이버플러스스토어",
+        "uploader_name": "naverplusstore",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "퀸잇": {
+        "dropdown_name": "퀸잇",
+        "api_key": "queenit",
+        "html_name": "퀸잇",
+        "uploader_name": "queenit",
+        "enabled_product": True,
+        "enabled_brand": True,
+    },
+    "홈앤쇼핑": {
+        "dropdown_name": "홈앤쇼핑",
+        "api_key": "hnsmall",
+        "html_name": "홈앤쇼핑",
+        "uploader_name": "hnsmall",
+        "enabled_product": True,
+        "enabled_brand": False,
+    },
+    "로켓그로스": {
+        "dropdown_name": "로켓그로스",
+        "api_key": "rocketgrowth",
+        "html_name": "로켓그로스",
+        "uploader_name": "rocketgrowth",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
+    "테무": {
+        "dropdown_name": "테무",
+        "api_key": "temu",
+        "html_name": "테무",
+        "uploader_name": "temu",
+        "enabled_product": False,
+        "enabled_brand": False,
+    },
 }
+
+
+# ==================== 헬퍼 함수 ====================
+
+def get_enabled_channels(promo_type: str) -> list:
+    """
+    프로모션 타입별 활성화된 채널 목록 (표준명)
+    
+    Args:
+        promo_type: "product" 또는 "brand"
+    
+    Returns:
+        활성화된 채널의 표준명 리스트
+    """
+    key = f"enabled_{promo_type}"
+    return [std for std, info in CHANNEL_MASTER.items() if info.get(key, False)]
 
 
 def get_standard_channel_name(channel_name: str) -> str:
@@ -69,16 +307,27 @@ def get_standard_channel_name(channel_name: str) -> str:
     if not channel_name:
         return channel_name
     
-    # 대소문자 무시, 공백 제거하여 매칭
+    # 정규화 (대소문자 무시, 공백 제거)
     normalized = channel_name.strip().lower().replace(" ", "")
     
-    for standard, aliases in CHANNEL_NORMALIZATION.items():
-        for alias in aliases:
-            if normalized == alias.lower().replace(" ", ""):
+    # CHANNEL_MASTER에서 검색
+    for standard, info in CHANNEL_MASTER.items():
+        # 표준명 자체 확인
+        if normalized == standard.lower().replace(" ", ""):
+            return standard
+        
+        # 각 필드 확인
+        for field in ["dropdown_name", "api_key", "html_name", "uploader_name"]:
+            value = info.get(field, "")
+            if value and normalized == value.lower().replace(" ", ""):
                 return standard
     
     # 매칭 실패시 원본 반환
     return channel_name
+
+
+# 하위 호환성을 위한 별칭
+CHANNEL_NORMALIZATION = {std: [info["api_key"], info["html_name"]] for std, info in CHANNEL_MASTER.items()}
 
 
 # 프로모션 타입별 컬럼 매핑

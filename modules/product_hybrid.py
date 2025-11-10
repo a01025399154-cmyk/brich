@@ -1,7 +1,7 @@
 """
-하이브리드 상품 채널 정보 조회 모듈 (정규화 버전)
+하이브리드 상품 채널 정보 조회 모듈 (리팩토링)
 API 우선, 실패 시 웹 스크래핑으로 백업
-모든 채널명을 표준명으로 정규화
+CHANNEL_MASTER 기반 채널명 정규화
 """
 
 from typing import Dict, List
@@ -28,6 +28,7 @@ class HybridProductClient:
     def _normalize_channel_dict(self, channels: Dict[str, str]) -> Dict[str, str]:
         """
         채널 딕셔너리의 키를 표준 채널명으로 정규화
+        (이미 product_api와 product_scraper에서 정규화되므로 검증용)
         
         Args:
             channels: {채널명: 채널상품번호}
@@ -49,6 +50,7 @@ class HybridProductClient:
         2차: API 실패 시 웹 스크래핑 (자동)
         
         모든 채널명을 표준명으로 정규화하여 반환
+        (product_api와 product_scraper에서 이미 정규화 수행)
         
         Args:
             product_ids: BRICH 상품번호 리스트
@@ -59,7 +61,8 @@ class HybridProductClient:
         print("\n[1단계] API를 통한 상품 조회 시도...")
         api_results = self.api_client.query_products(product_ids)
         
-        # 채널명 정규화
+        # API 결과는 이미 표준명으로 반환됨 (product_api에서 처리)
+        # 추가 정규화는 검증 목적으로만 수행
         api_results = {
             pid: self._normalize_channel_dict(channels)
             for pid, channels in api_results.items()
@@ -95,7 +98,8 @@ class HybridProductClient:
             
             scraper_results = self.scraper.scrape_products(failed_products)
             
-            # 스크래핑 결과도 정규화
+            # 스크래핑 결과도 이미 표준명으로 반환됨 (product_scraper에서 처리)
+            # 추가 정규화는 검증 목적으로만 수행
             scraper_results = {
                 pid: self._normalize_channel_dict(channels)
                 for pid, channels in scraper_results.items()

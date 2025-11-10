@@ -1,6 +1,7 @@
 """
-데이터 처리 모듈
+데이터 처리 모듈 (리팩토링)
 상품 프로모션과 브랜드 프로모션 데이터 처리
+CHANNEL_MASTER 기반 채널 파싱
 """
 
 import pandas as pd
@@ -42,8 +43,12 @@ def process_product_promotion(df_input: pd.DataFrame, channel_mappings: Dict) ->
         product_channels = channel_mappings[product_id]
         print(f"    ✓ API 채널: {list(product_channels.keys())}")
         
-        # 채널 정보 파싱
-        target_channels = parse_channel_dropdown(channel_info, product_channels)
+        # 채널 정보 파싱 (상품 프로모션)
+        target_channels = parse_channel_dropdown(
+            channel_info, 
+            available_channels=product_channels,
+            promo_type="product"  # ✅ 명시적 타입 지정
+        )
         print(f"    → 파싱 결과: {list(target_channels.keys()) if target_channels else '없음'}")
         
         # 각 채널별로 행 생성
@@ -92,8 +97,12 @@ def process_brand_promotion(df_input: pd.DataFrame) -> pd.DataFrame:
         brand_id = int(row['브랜드번호'])
         channel_info = row['채널']
         
-        # 채널 정보 파싱 (API 조회 없이 드롭다운만 사용)
-        target_channels = parse_channel_dropdown(channel_info, None)
+        # 채널 정보 파싱 (브랜드 프로모션 - API 조회 없음)
+        target_channels = parse_channel_dropdown(
+            channel_info, 
+            available_channels=None,
+            promo_type="brand"  # ✅ 명시적 타입 지정
+        )
         
         # 각 채널별로 행 생성
         for channel_name in target_channels.keys():
@@ -256,3 +265,4 @@ if __name__ == "__main__":
     
     df_output_brand = process_brand_promotion(df_test_brand)
     print(df_output_brand)
+    print(f"\n✅ 브랜드 행 수: {len(df_output_brand)} (예상: 1, SSG만)")

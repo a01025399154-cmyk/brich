@@ -349,8 +349,9 @@ class BeeflowUploader:
         return False
 
     def select_channel_from_multiselect(self, channel_name: str) -> bool:
-        """multiselect에서 채널 선택 (재시도 포함, 로그 최소화)"""
-
+        """multiselect에서 채널 선택 (CHANNEL_MASTER 기반)"""
+        import config
+        
         for attempt in range(self.MAX_CHANNEL_SELECT_RETRIES):
             try:
                 # 오버레이 있으면 닫기
@@ -360,31 +361,16 @@ class BeeflowUploader:
                             continue
                         return False
 
-                # 채널명 매핑
-                channel_mapping = {
-                    "SSG": "ssg",
-                    "지마켓": "gmarket",
-                    "지마켓(상품번호)": "gmarket",
-                    "옥션": "auction",
-                    "옥션(상품번호)": "auction",
-                    "11번가": "11st",
-                    "쿠팡": "coupang",
-                    "위메프": "wemakeprice",
-                    "GS샵": "gsshop",
-                    "GS Shop": "gsshop",
-                    "롯데ON": "lotte",
-                    "CJ몰": "cjmall",
-                    "하프클럽(신규)": "newhalfclub",
-                    "Halfclub": "newhalfclub",
-                    "롯데i몰": "lotteimall",
-                    "카카오쇼핑하기": "kakaotalkshopping",
-                    "카카오스타일": "kakaostyle",
-                    "H몰": "hmall",
-                    "홈앤쇼핑": "hnsmall",
-                    "퀸잇": "queenit",
-                }
-
-                api_channel_name = channel_mapping.get(channel_name, channel_name.lower())
+                # 표준 채널명 → uploader_name 변환 (CHANNEL_MASTER 사용)
+                uploader_name = None
+                for standard, info in config.CHANNEL_MASTER.items():
+                    if channel_name == standard:
+                        uploader_name = info["uploader_name"]
+                        break
+                
+                if not uploader_name:
+                    print(f"    ⚠️ 알 수 없는 채널: {channel_name}")
+                    return False
 
                 # multiselect 찾기 및 클릭
                 multiselect = self.wait.until(
@@ -418,7 +404,7 @@ class BeeflowUploader:
                             "textContent"
                         ).strip().lower()
 
-                    if option_text == api_channel_name:
+                    if option_text == uploader_name.lower():
                         clickable = option.find_element(
                             By.CSS_SELECTOR, ".multiselect__option"
                         )

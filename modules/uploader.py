@@ -400,14 +400,6 @@ class BeeflowUploader:
                         clickable = option.find_element(By.CSS_SELECTOR, ".multiselect__option")
                         self.driver.execute_script("arguments[0].click();", clickable)
                         time.sleep(1)
-                        
-                        # 선택 확인
-                        if self._is_channel_selected(channel_name):
-                            print(f"    ✓ 채널 선택: {channel_name}")
-                            return True
-                        else:
-                            print(f"    ⚠️ 채널 선택 완료했으나 확인 실패")
-                            return True  # 일단 진행
                 
                 print(f"    ✗ 채널 '{channel_name}' 찾을 수 없음")
                 

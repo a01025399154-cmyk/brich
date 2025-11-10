@@ -27,7 +27,7 @@ class HybridProductClient:
         """
         여러 상품에 대해 채널별 상품번호 조회
         1차: API 시도
-        2차: API 실패 시 웹 스크래핑
+        2차: API 실패 시 웹 스크래핑 (자동)
         
         Args:
             product_ids: BRICH 상품번호 리스트
@@ -51,23 +51,22 @@ class HybridProductClient:
         print(f"\n⚠️  API 실패 상품: {len(failed_products)}개")
         print("  상품 번호:", failed_products)
         
-        # 웹 스크래핑 사용 여부 확인
+        # 웹 스크래핑 인증 정보 없으면 여기까지만
         if not self.email or not self.password:
             print("  ✗ 웹 스크래핑 인증 정보 없음 - API 결과만 반환")
             return api_results
         
-        use_scraper = input("\n웹 스크래핑으로 재시도하시겠습니까? (y/n): ").strip().lower()
-        
-        if use_scraper not in ['y', 'yes']:
-            print("  웹 스크래핑 건너뜀")
-            return api_results
-        
-        # 웹 스크래핑 시도
-        print("\n[2단계] 웹 스크래핑을 통한 재조회 시작...")
-        
+        # 🔹 더 이상 y/n 안 묻고 바로 스크래핑 진입
+        print("\n[2단계] 웹 스크래핑을 통한 재조회 자동 수행...")
+
         try:
             if self.scraper is None:
-                self.scraper = ProductWebScraper()
+                # 필요하면 여기에서 배치 크기/헤드리스 설정
+                # 예: batch_size=20, headless=True
+                self.scraper = ProductWebScraper(
+                    batch_size=20,
+                    headless=True,
+                )
                 self.scraper.login(self.email, self.password)
             
             scraper_results = self.scraper.scrape_products(failed_products)
@@ -77,6 +76,8 @@ class HybridProductClient:
                 if channels:  # 웹 스크래핑으로 정보를 찾은 경우
                     api_results[product_id] = channels
                     print(f"  ✓ 상품 {product_id}: 웹 스크래핑 성공 ({len(channels)}개 채널)")
+                else:
+                    print(f"  ○ 상품 {product_id}: 웹 스크래핑에서도 채널 정보 없음")
             
             print("\n✓ 하이브리드 조회 완료\n")
             

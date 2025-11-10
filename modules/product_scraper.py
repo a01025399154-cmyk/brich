@@ -50,7 +50,7 @@ class ProductWebScraper:
     def login(self, email: str, password: str):
         """비플로우 로그인"""
         print("  [웹 스크래퍼] 로그인 중...")
-        self.driver.get("https://b-flow.co.kr")
+        self.driver.get("https://b-flow.co.kr/products/new#/")
         
         try:
             # 로그인 버튼 클릭

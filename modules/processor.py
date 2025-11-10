@@ -30,15 +30,21 @@ def process_product_promotion(df_input: pd.DataFrame, channel_mappings: Dict) ->
         product_id = int(row['상품번호'])
         channel_info = row['채널']
         
+        # ⭐ 디버깅 로그 추가
+        print(f"\n  [디버그] 상품 {product_id}")
+        print(f"    채널 값: '{channel_info}'")
+        
         # 채널 매핑 정보 확인
         if product_id not in channel_mappings:
-            print(f"  경고: 상품 {product_id} 채널 정보 없음 (API 조회 실패 또는 채널 미등록)")
+            print(f"    ✗ 채널 매핑 정보 없음")
             continue
         
         product_channels = channel_mappings[product_id]
+        print(f"    ✓ API 채널: {list(product_channels.keys())}")
         
-        # 채널 정보 파싱 (API 조회 결과 활용)
+        # 채널 정보 파싱
         target_channels = parse_channel_dropdown(channel_info, product_channels)
+        print(f"    → 파싱 결과: {list(target_channels.keys()) if target_channels else '없음'}")
         
         # 각 채널별로 행 생성
         for channel_name, channel_product_id in target_channels.items():

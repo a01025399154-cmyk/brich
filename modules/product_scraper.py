@@ -358,57 +358,25 @@ class ProductWebScraper:
     def _parse_single_row(self, row) -> tuple[int, Dict[str, str]]:
         """
         테이블 한 행에서 상품번호와 채널 정보 추출
-        
-        HTML 구조:
-        - 0: 체크박스
-        - 1: 관리 버튼
-        - 2: 승인 상태
-        - 3: 판매 상태
-        - 4: 전송상태
-        - 5: 딜상품
-        - 6: 행사상품 여부
-        - 7: 멀티팩 여부
-        - 8: 이미지
-        - 9: 상품명
-        - 10: 상품번호 ← 여기!
-        
-        Args:
-            row: 테이블 행 WebElement
-        
-        Returns:
-            (상품번호, {채널명: 채널상품번호})
         """
         cells = row.find_elements(By.TAG_NAME, "td")
         
-        if len(cells) < 40:
+        if len(cells) < 60:
             return None, {}
         
-        # 상품번호 추출 - 10번째 컬럼 (0-based index)
+        # 상품번호 추출 - 10번째 컬럼
         product_id = None
-        
         try:
-            # 10번째 셀의 div 내부 텍스트 확인
-            divs = cells[10].find_elements(By.TAG_NAME, "div")
-            for div in divs:
-                div_text = div.text.strip()
-                if div_text and div_text.isdigit() and len(div_text) >= 8:
-                    product_id = int(div_text)
-                    break
-            
-            # div에서 못 찾으면 직접 텍스트 확인
-            if not product_id:
-                text = cells[10].text.strip()
-                if text and text.isdigit() and len(text) >= 8:
-                    product_id = int(text)
-        except (ValueError, IndexError):
+            text = cells[10].text.strip()
+            if text and text.isdigit() and len(text) >= 8:
+                product_id = int(text)
+        except:
             pass
         
         if not product_id:
             return None, {}
         
-        # 채널 정보 추출 
-        # 관리(8) + 상품(8) + 판매(2) + 가격(4) + 업무(2) + 채널할인(33) = 57
-        # 연동정보는 57번째부터 시작
+        # 채널 정보 추출
         channels = {}
         channel_start_idx = 57
         
@@ -421,28 +389,75 @@ class ProductWebScraper:
             cell = cells[cell_index]
             
             try:
-                # 연동 성공 라벨 확인
-                success_labels = cell.find_elements(
-                    By.CSS_SELECTOR, 
-                    "span.br-label-green"
-                )
+                # 연동 성공 확인
+                if "연동 성공" not in cell.text:
+                    continue
                 
-                is_connected = any("연동 성공" in label.text for label in success_labels)
+                # 셀 텍스트를 줄바꿈으로 분리
+                lines = cell.text.split('\n')
                 
-                if is_connected:
-                    # 채널 상품번호 추출
-                    channel_id_divs = cell.find_elements(By.TAG_NAME, "div")
+                # 8자 이상 숫자인 줄 찾기
+                for line in lines:
+                    line = line.strip()
+                    # 순수 숫자만 (공백/하이픈 제거)
+                    clean = line.replace(' ', '').replace('-', '')
                     
-                    for div in channel_id_divs:
-                        channel_id = div.text.strip()
-                        if channel_id and channel_id.isdigit():
-                            channels[channel_name] = channel_id
-                            break
-            
-            except Exception:
+                    if clean.isdigit() and len(clean) >= 8:
+                        channels[channel_name] = clean
+                        break
+            except:
                 continue
         
         return product_id, channels
+
+    def _extract_channel_id_from_cell(self, cell) -> str:
+        """
+        셀에서 채널 상품번호 추출 (구조 독립적)
+        
+        원리:
+        - 셀의 모든 텍스트를 줄바꿈으로 분리
+        - 각 줄에서 한글/라벨 제거
+        - 8자 이상 순수 숫자를 찾으면 반환
+        - 여러 개면 첫 번째 반환 (상품번호 우선)
+        
+        Args:
+            cell: 테이블 셀 WebElement
+        
+        Returns:
+            채널 상품번호 (없으면 None)
+        """
+        # 셀의 전체 텍스트 가져오기
+        cell_text = cell.text
+        
+        if not cell_text:
+            return None
+        
+        # 줄바꿈으로 분리
+        lines = cell_text.split('\n')
+        
+        for line in lines:
+            # 공백 제거
+            line = line.strip()
+            
+            if not line:
+                continue
+            
+            # 한글이 있으면 라벨이므로 스킵
+            if any('\uAC00' <= c <= '\uD7A3' for c in line):
+                continue
+            
+            # 영문자가 있으면 라벨이므로 스킵 (예: "상품번호", "Master")
+            if any(c.isalpha() for c in line):
+                continue
+            
+            # 순수 숫자만 추출 (공백, 쉼표 제거)
+            clean = line.replace(' ', '').replace(',', '').replace('-', '')
+            
+            # 8자 이상 숫자면 채널 상품번호
+            if clean.isdigit() and len(clean) >= 8:
+                return clean
+        
+        return None
     
     def _scrape_single_search(self, product_id: int) -> Dict[str, str]:
         """

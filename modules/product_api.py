@@ -34,7 +34,7 @@ class ProductAPIClient:
         Returns:
             {
                 상품번호: {
-                    "채널명": "채널상품번호",
+                    "표준_채널명": "채널상품번호",
                     ...
                 }
             }
@@ -70,7 +70,7 @@ class ProductAPIClient:
             product_id: BRICH 상품번호
 
         Returns:
-            {채널명: 채널상품번호}
+            {표준_채널명: 채널상품번호}
         """
         url = f"{self.api_base_url}/api/v1/product/{product_id}/channel-product-id"
 
@@ -103,27 +103,27 @@ class ProductAPIClient:
             if not ch_id or ch_id in ["-", "None", "null", "없음"]:
                 continue
 
-            normalized = self._normalize_channel_key(api_key)
-            if normalized:
-                mapping[normalized] = ch_id
+            # API 키를 표준 채널명으로 변환
+            standard_name = self._api_key_to_standard(api_key)
+            if standard_name:
+                mapping[standard_name] = ch_id
 
         return mapping
 
-    def _normalize_channel_key(self, key: str) -> Optional[str]:
+    def _api_key_to_standard(self, api_key: str) -> Optional[str]:
         """
-        API 채널 키 → 한글 채널명 변환
-
+        API 채널 키 → 표준 채널명 변환
+        
         Args:
-            key: API 채널 키 (예: "ssg", "gmarket", "coupang")
-
+            api_key: API 채널 키 (예: "ssg", "gmarket", "coupang")
+        
         Returns:
-            한글 채널명
+            표준 채널명
         """
-        if not key:
+        if not api_key:
             return None
 
-        k = key.strip().lower()
-
+        # API 키 → 표준명 매핑 (실제 존재하는 것만)
         mapping = {
             "11st": "11번가",
             "akmall": "AK몰",
@@ -132,21 +132,17 @@ class ProductAPIClient:
             "cafe24": "카페24",
             "cjmall": "CJ몰",
             "coupang": "쿠팡",
-            "g9": "G9",
-            "globalauction": "옥션 글로벌",
-            "globalgmarket": "지마켓 글로벌",
+            "globalauction": "글로벌 옥션",
+            "globalgmarket": "글로벌 지마켓",
             "globalnaversmartstore": "글로벌 네이버스마트스토어",
             "gmarket": "지마켓",
             "gsshop": "GS Shop",
-            "halfclub": "(구)하프클럽",
-            "hmall": "H몰",
+            "hmall": "Hmall",
             "hnsmall": "홈앤쇼핑",
             "hwahae": "화해",
-            "interpark": "인터파크",
             "kakaostyle": "카카오스타일",
             "kakaotalkgift": "카카오 선물하기",
             "kakaotalkshopping": "카카오 쇼핑하기",
-            "kakaotalkstore": "카카오톡 스토어",
             "lotte": "롯데ON",
             "lotteimall": "롯데i몰",
             "musinsa": "무신사",
@@ -160,11 +156,10 @@ class ProductAPIClient:
             "shein": "쉬인",
             "ssg": "SSG",
             "temu": "테무",
-            "tmon": "티몬",
             "wemakeprice": "위메프",
         }
 
-        return mapping.get(k)
+        return mapping.get(api_key.strip().lower())
 
 
 if __name__ == "__main__":

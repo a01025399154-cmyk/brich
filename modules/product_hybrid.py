@@ -1,11 +1,13 @@
 """
-하이브리드 상품 채널 정보 조회 모듈
+하이브리드 상품 채널 정보 조회 모듈 (정규화 버전)
 API 우선, 실패 시 웹 스크래핑으로 백업
+모든 채널명을 표준명으로 정규화
 """
 
 from typing import Dict, List
 from modules.product_api import ProductAPIClient
 from modules.product_scraper import ProductWebScraper
+import config
 
 
 class HybridProductClient:
@@ -23,20 +25,45 @@ class HybridProductClient:
         self.email = email
         self.password = password
     
+    def _normalize_channel_dict(self, channels: Dict[str, str]) -> Dict[str, str]:
+        """
+        채널 딕셔너리의 키를 표준 채널명으로 정규화
+        
+        Args:
+            channels: {채널명: 채널상품번호}
+        
+        Returns:
+            {표준_채널명: 채널상품번호}
+        """
+        normalized = {}
+        for ch_name, ch_id in channels.items():
+            standard_name = config.get_standard_channel_name(ch_name)
+            normalized[standard_name] = ch_id
+        
+        return normalized
+    
     def query_products(self, product_ids: List[int]) -> Dict[int, Dict[str, str]]:
         """
         여러 상품에 대해 채널별 상품번호 조회
         1차: API 시도
         2차: API 실패 시 웹 스크래핑 (자동)
         
+        모든 채널명을 표준명으로 정규화하여 반환
+        
         Args:
             product_ids: BRICH 상품번호 리스트
         
         Returns:
-            {상품번호: {채널명: 채널상품번호}} 딕셔너리
+            {상품번호: {표준_채널명: 채널상품번호}} 딕셔너리
         """
         print("\n[1단계] API를 통한 상품 조회 시도...")
         api_results = self.api_client.query_products(product_ids)
+        
+        # 채널명 정규화
+        api_results = {
+            pid: self._normalize_channel_dict(channels)
+            for pid, channels in api_results.items()
+        }
         
         # API 실패한 상품들 확인
         failed_products = [
@@ -56,13 +83,10 @@ class HybridProductClient:
             print("  ✗ 웹 스크래핑 인증 정보 없음 - API 결과만 반환")
             return api_results
         
-        # 🔹 더 이상 y/n 안 묻고 바로 스크래핑 진입
         print("\n[2단계] 웹 스크래핑을 통한 재조회 자동 수행...")
 
         try:
             if self.scraper is None:
-                # 필요하면 여기에서 배치 크기/헤드리스 설정
-                # 예: batch_size=20, headless=True
                 self.scraper = ProductWebScraper(
                     batch_size=20,
                     headless=True,
@@ -70,6 +94,12 @@ class HybridProductClient:
                 self.scraper.login(self.email, self.password)
             
             scraper_results = self.scraper.scrape_products(failed_products)
+            
+            # 스크래핑 결과도 정규화
+            scraper_results = {
+                pid: self._normalize_channel_dict(channels)
+                for pid, channels in scraper_results.items()
+            }
             
             # 결과 병합
             for product_id, channels in scraper_results.items():
@@ -108,7 +138,7 @@ if __name__ == "__main__":
         test_products = [986269048, 2103835824, 999999999]  # 마지막은 존재하지 않는 상품
         results = client.query_products(test_products)
         
-        print("\n=== 최종 조회 결과 ===")
+        print("\n=== 최종 조회 결과 (정규화됨) ===")
         for product_id, channels in results.items():
             print(f"상품 {product_id}:")
             if channels:

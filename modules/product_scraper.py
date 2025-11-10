@@ -45,7 +45,7 @@ class ProductWebScraper:
         options.add_argument('--window-size=1920,1080')
         
         self.driver = webdriver.Chrome(options=options)
-        self.wait = WebDriverWait(self.driver, 15)
+        self.wait = WebDriverWait(self.driver, 20)  # 타임아웃 증가
     
     def login(self, email: str, password: str):
         """비플로우 로그인"""
@@ -97,20 +97,53 @@ class ProductWebScraper:
             {채널명: 채널상품번호} 딕셔너리
         """
         try:
-            # 상품 검색 페이지로 이동
-            search_url = f"https://b-flow.co.kr/product/management/list?productId={product_id}"
-            self.driver.get(search_url)
-            time.sleep(2)
-            
-            # 검색 버튼 클릭
-            try:
-                search_btn = self.driver.find_element(
-                    By.XPATH, "//button[contains(@class, 'br-btn-purple')]//span[text()='검색']"
-                )
-                self.driver.execute_script("arguments[0].click();", search_btn)
+            # 검색 페이지로 이동 (최초 1회만)
+            if self.driver.current_url != "https://b-flow.co.kr/products/new#/":
+                self.driver.get("https://b-flow.co.kr/product/management/list")
                 time.sleep(2)
+            
+            # 검색어 입력 필드 찾기 (상품번호 선택 후 입력)
+            # 1. 검색 타입 선택 (상품번호)
+            try:
+                search_type_select = self.wait.until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, ".multiselect.br-select input"))
+                )
+                search_type_select.click()
+                time.sleep(0.5)
+                
+                # 상품번호 옵션 선택
+                product_num_option = self.driver.find_element(
+                    By.XPATH, "//span[text()='상품번호']"
+                )
+                product_num_option.click()
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"    ⚠️ 검색 타입 선택 실패: {e}")
+            
+            # 2. 검색어 입력
+            search_input = self.driver.find_element(
+                By.CSS_SELECTOR, ".br-text-wrapper input[type='text']"
+            )
+            search_input.clear()
+            search_input.send_keys(str(product_id))
+            time.sleep(0.5)
+            
+            # 3. 검색 버튼 클릭
+            search_btn = self.driver.find_element(
+                By.XPATH, "//button[@class='br-btn br-btn-purple br-btn-medium-form']//span[text()='검색']"
+            )
+            self.driver.execute_script("arguments[0].click();", search_btn)
+            
+            # 검색 결과 로딩 대기
+            time.sleep(3)
+            
+            # 테이블 로딩 대기
+            try:
+                self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "tbody tr"))
+                )
             except Exception:
-                pass  # 이미 검색 결과가 표시되어 있을 수 있음
+                print("    ⚠️ 테이블 로딩 타임아웃")
             
             # 테이블에서 상품 행 찾기
             rows = self.driver.find_elements(By.CSS_SELECTOR, "tbody tr")
@@ -125,15 +158,17 @@ class ProductWebScraper:
             # 모든 td 요소 가져오기
             cells = row.find_elements(By.TAG_NAME, "td")
             
-            # 채널 정보가 시작되는 인덱스 찾기
-            # "연동정보" 그룹 다음부터 채널별 정보가 시작됨
-            # 일반적으로 23번째 컬럼부터 시작 (0-indexed: 56번째 td부터)
-            channel_start_index = 56  # 실제 HTML 구조에 맞게 조정 필요
+            print(f"    발견된 컬럼 수: {len(cells)}")
             
             channels = {}
             
+            # HTML을 보면 "연동정보" 그룹에서 채널별로 td가 있음
+            # SSG부터 시작하는 인덱스를 찾아야 함
+            # 일반적으로 56번째 컬럼(0-indexed)부터 시작
+            
             for idx, channel_name in enumerate(self.CHANNEL_ORDER):
-                cell_index = channel_start_index + idx
+                # 채널 정보가 시작되는 인덱스: 56 (HTML 구조 기준)
+                cell_index = 56 + idx
                 
                 if cell_index >= len(cells):
                     break
@@ -141,21 +176,33 @@ class ProductWebScraper:
                 cell = cells[cell_index]
                 
                 try:
-                    # 연동 성공인 경우 채널 상품번호 추출
-                    success_label = cell.find_elements(
-                        By.XPATH, 
-                        ".//span[contains(@class, 'br-label-green') and contains(text(), '연동 성공')]"
+                    # HTML 구조: div 안에 채널 상품번호가 있고, 그 아래 "연동 성공" 라벨이 있음
+                    # <div>1000617469196</div>
+                    # <span class="br-label-green">연동 성공</span>
+                    
+                    # 연동 성공 라벨 확인
+                    success_labels = cell.find_elements(
+                        By.CSS_SELECTOR, 
+                        "span.br-label-green"
                     )
                     
-                    if success_label:
-                        # 채널 상품번호는 같은 div 안의 첫 번째 div에 있음
-                        channel_id_div = cell.find_element(By.XPATH, ".//div/div[1]")
-                        channel_id = channel_id_div.text.strip()
+                    # "연동 성공" 텍스트가 있는지 확인
+                    is_connected = any("연동 성공" in label.text for label in success_labels)
+                    
+                    if is_connected:
+                        # 채널 상품번호 추출 (첫 번째 div의 텍스트)
+                        channel_id_divs = cell.find_elements(By.TAG_NAME, "div")
                         
-                        if channel_id and channel_id != "-":
-                            channels[channel_name] = channel_id
+                        for div in channel_id_divs:
+                            channel_id = div.text.strip()
+                            # 숫자로만 이루어진 ID만 추출
+                            if channel_id and channel_id.isdigit():
+                                channels[channel_name] = channel_id
+                                print(f"    ✓ {channel_name}: {channel_id}")
+                                break
                 
-                except Exception:
+                except Exception as e:
+                    # 개별 채널 파싱 실패는 무시하고 계속
                     continue
             
             return channels
@@ -189,7 +236,7 @@ class ProductWebScraper:
                 else:
                     print("    ✗ 채널 정보 없음")
                 
-                time.sleep(0.5)  # 서버 부하 방지
+                time.sleep(1)  # 서버 부하 방지
                 
             except Exception as e:
                 print(f"    ✗ 오류: {e}")
@@ -204,29 +251,12 @@ class ProductWebScraper:
 
 
 if __name__ == "__main__":
-    # 테스트
-    import sys
-    import os
-    
-    # 프로젝트 루트 디렉토리를 sys.path에 추가
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(current_dir)
-    sys.path.insert(0, parent_dir)
-    
-    try:
-        import config
-    except ModuleNotFoundError:
-        print("❌ config.py를 찾을 수 없습니다.")
-        print("   이 스크립트는 프로젝트 루트에서 실행하거나,")
-        print("   python3 -m modules.product_scraper 형태로 실행해주세요.")
-        sys.exit(1)
-    
     scraper = ProductWebScraper()
     
     try:
-        scraper.login(config.BEEFLOW_EMAIL, config.BEEFLOW_PASSWORD)
+        scraper.login("jsj@brich.co.kr", "young124@")
         
-        test_products = [2103835824]  # HTML에서 확인한 상품번호
+        test_products = [2103835824]
         results = scraper.scrape_products(test_products)
         
         print("\n=== 스크래핑 결과 ===")

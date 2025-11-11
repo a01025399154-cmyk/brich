@@ -239,7 +239,6 @@ def upload_with_status_tracking(output_files: List[str], output_dir: str,
         print("=" * 60)
         
     finally:
-        import time
         time.sleep(1)
         uploader.close()
 

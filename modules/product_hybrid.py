@@ -4,6 +4,11 @@ API 우선, 실패 시 웹 스크래핑으로 백업
 CHANNEL_MASTER 기반 채널명 정규화
 """
 
+import sys
+from pathlib import Path
+# 프로젝트 루트를 Python 경로에 추가
+sys.path.append(str(Path(__file__).parent.parent))
+
 from typing import Dict, List
 from modules.product_api import ProductAPIClient
 from modules.product_scraper import ProductWebScraper

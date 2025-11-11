@@ -4,6 +4,11 @@
 CHANNEL_MASTER 기반으로 채널명 변환
 """
 
+import sys
+from pathlib import Path
+# 프로젝트 루트를 Python 경로에 추가
+sys.path.append(str(Path(__file__).parent.parent))
+
 import time
 from typing import Dict, List, Optional
 import requests

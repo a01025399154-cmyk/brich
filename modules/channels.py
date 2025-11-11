@@ -4,6 +4,11 @@
 CHANNEL_MASTER 기반 일원화
 """
 
+import sys
+from pathlib import Path
+# 프로젝트 루트를 Python 경로에 추가
+sys.path.append(str(Path(__file__).parent.parent))
+
 from typing import Dict, Optional
 import pandas as pd
 import config

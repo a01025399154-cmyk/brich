@@ -179,8 +179,7 @@ def upload_with_status_tracking(output_files: List[str], output_dir: str,
 
         for idx, file_path in enumerate(output_files, start=1):
             filename = os.path.basename(file_path)
-            print("\n" + "-" * 60)
-            print(f"[{idx}/{total}] {filename}")
+            print(f"[{idx}/{total}] {filename}", end=" ", flush=True)
 
             try:
                 name_without_ext = filename.replace('.xlsx', '')
@@ -198,8 +197,11 @@ def upload_with_status_tracking(output_files: List[str], output_dir: str,
                 promotion_type = "brand" if "브랜드" in raw_type else "product"
                 channel_name = parts[2]
                 
-                print(f"  타입: {promotion_type} | 채널: {channel_name}")
-
+                # 진행 단계 표시
+                print("→ 페이지 로딩", end="", flush=True)
+                time.sleep(0.3)
+                print(" → 날짜 설정", end="", flush=True)
+                
                 ok = uploader.upload_promotion(
                     file_path=file_path,
                     channel_name=channel_name,
@@ -211,17 +213,17 @@ def upload_with_status_tracking(output_files: List[str], output_dir: str,
                 if ok:
                     success_count += 1
                     update_upload_status(status_file, filename, promotion_type, True)
-                    print(f"  ✅ 성공")
+                    print(" → ✅ 완료")
                 else:
                     failed_count += 1
                     update_upload_status(status_file, filename, promotion_type, False, "업로드 실패")
-                    print(f"  ❌ 실패")
+                    print(" → ❌ 실패")
             
             except Exception as e:
                 failed_count += 1
                 file_type = "brand" if "브랜드" in filename else "product"
                 update_upload_status(status_file, filename, file_type, False, str(e))
-                print(f"  ❌ 예외: {e}")
+                print(f" → ❌ 예외: {e}")
         
         print("\n" + "=" * 60)
         print("업로드 요약")
@@ -451,15 +453,92 @@ def main():
     if resume_info["action"] == "resume":
         pending = resume_info["pending_uploads"]
         
+        # 업로드 성공 여부 추적
+        upload_success = {"product": False, "brand": False}
+        
         if pending["product"]:
             print(f"\n📦 상품 {len(pending['product'])}개 재시도\n")
             upload_with_status_tracking(pending["product"], config.OUTPUT_DIR,
                                        config.BEEFLOW_EMAIL, config.BEEFLOW_PASSWORD)
+            
+            # 업로드 성공 확인
+            status_file = os.path.join(config.OUTPUT_DIR, "upload_status.json")
+            status_data = load_upload_status(status_file)
+            if status_data:
+                product_files = [os.path.basename(f) for f in pending["product"]]
+                all_success = all(
+                    status_data["files"].get(fname, {}).get("status") == "success"
+                    for fname in product_files
+                )
+                upload_success["product"] = all_success
         
         if pending["brand"]:
             print(f"\n🏷️  브랜드 {len(pending['brand'])}개 재시도\n")
             upload_with_status_tracking(pending["brand"], config.OUTPUT_DIR,
                                        config.BEEFLOW_EMAIL, config.BEEFLOW_PASSWORD)
+            
+            # 업로드 성공 확인
+            status_file = os.path.join(config.OUTPUT_DIR, "upload_status.json")
+            status_data = load_upload_status(status_file)
+            if status_data:
+                brand_files = [os.path.basename(f) for f in pending["brand"]]
+                all_success = all(
+                    status_data["files"].get(fname, {}).get("status") == "success"
+                    for fname in brand_files
+                )
+                upload_success["brand"] = all_success
+        
+        # ✅ 설정일 업데이트
+        if upload_success["product"] or upload_success["brand"]:
+            print("\n📝 구글 시트 설정일 업데이트 중...")
+            
+            # 시트 선택
+            sheet_name = select_sheet_name()
+            
+            if upload_success["product"]:
+                try:
+                    # 상품 설정일 업데이트
+                    df_input = read_sheet(
+                        config.GOOGLE_SHEET_URL,
+                        config.GOOGLE_CREDENTIALS_PATH,
+                        column_range="K:R",
+                        column_mapping=config.PRODUCT_COLUMNS,
+                        interactive=False,
+                        sheet_name=sheet_name
+                    )
+                    products_to_update = df_input[df_input["설정일"].isna()]["상품번호"].unique()
+                    if len(products_to_update) > 0:
+                        update_setting_dates(
+                            config.GOOGLE_SHEET_URL,
+                            config.GOOGLE_CREDENTIALS_PATH,
+                            products_to_update.tolist(),
+                            "M", "R", sheet_name
+                        )
+                except Exception as e:
+                    print(f"⚠️  상품 설정일 업데이트 실패: {e}")
+            
+            if upload_success["brand"]:
+                try:
+                    # 브랜드 설정일 업데이트
+                    df_input = read_sheet(
+                        config.GOOGLE_SHEET_URL,
+                        config.GOOGLE_CREDENTIALS_PATH,
+                        column_range="A:I",
+                        column_mapping=config.BRAND_COLUMNS,
+                        start_row=3,
+                        interactive=False,
+                        sheet_name=sheet_name
+                    )
+                    brands_to_update = df_input[df_input["설정일"].isna()]["브랜드번호"].unique()
+                    if len(brands_to_update) > 0:
+                        update_setting_dates(
+                            config.GOOGLE_SHEET_URL,
+                            config.GOOGLE_CREDENTIALS_PATH,
+                            brands_to_update.tolist(),
+                            "C", "I", sheet_name
+                        )
+                except Exception as e:
+                    print(f"⚠️  브랜드 설정일 업데이트 실패: {e}")
         
         print("\n✅ Resume 완료")
         return

@@ -16,7 +16,7 @@ jobs:
     - name: Python 설정
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11'
     
     - name: Chrome 설치
       run: |
@@ -28,15 +28,15 @@ jobs:
     - name: 의존성 설치
       run: |
         pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r crawler/requirements.txt
     
     - name: Service Account 파일 생성
       run: |
-        echo '${{ secrets.GOOGLE_SA_JSON }}' > service_account.json
+        echo '${{ secrets.GOOGLE_SA_JSON }}' > crawler/service_account.json
     
     - name: 크롤링 실행
-      run: python local_crawler.py
+      run: python crawler/local_crawler.py
     
     - name: 임시 파일 정리
       if: always()
-      run: rm -f service_account.json
+      run: rm -f crawler/service_account.json

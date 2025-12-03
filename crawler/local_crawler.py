@@ -180,7 +180,13 @@ def create_driver(profile_dir: str) -> uc.Chrome:
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1280,720")
     options.add_argument(f"--user-data-dir={profile_dir}")
-    driver = uc.Chrome(options=options)
+    
+    # GitHub Actions 환경에서 자동으로 Chrome 다운로드
+    driver = uc.Chrome(
+        options=options,
+        use_subprocess=False,  # 시스템 Chrome 무시
+        version_main=None,      # 자동 버전 감지
+    )
     return driver
 
 

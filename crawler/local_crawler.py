@@ -174,19 +174,28 @@ def update_result_row(
 
 def create_driver(profile_dir: str) -> uc.Chrome:
     options = uc.ChromeOptions()
-    options.add_argument("--headless=new")  # GitHub Actions용 headless 모드
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1280,720")
     options.add_argument(f"--user-data-dir={profile_dir}")
     
-    # GitHub Actions 환경에서 자동으로 Chrome 다운로드
-    driver = uc.Chrome(
-        options=options,
-        use_subprocess=False,  # 시스템 Chrome 무시
-        version_main=None,      # 자동 버전 감지
-    )
+    # GitHub Actions에서 Chromium 사용
+    chrome_bin = os.environ.get("CHROME_BIN")
+    chromedriver_path = os.environ.get("CHROMEDRIVER_PATH")
+    
+    if chrome_bin and chromedriver_path:
+        # Chromium 사용 (GitHub Actions)
+        options.binary_location = chrome_bin
+        driver = uc.Chrome(
+            options=options,
+            driver_executable_path=chromedriver_path,
+        )
+    else:
+        # 기본 동작 (로컬)
+        driver = uc.Chrome(options=options)
+    
     return driver
 
 

@@ -18,10 +18,10 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: 기존 Chrome 제거
+    - name: Chromium 설치
       run: |
-        sudo apt-get remove -y google-chrome-stable || true
-        sudo apt-get autoremove -y
+        sudo apt-get update
+        sudo apt-get install -y chromium-browser chromium-chromedriver
     
     - name: 의존성 설치
       run: |
@@ -35,6 +35,8 @@ jobs:
     - name: 크롤링 실행
       run: |
         cd crawler
+        export CHROME_BIN=/usr/bin/chromium-browser
+        export CHROMEDRIVER_PATH=/usr/bin/chromedriver
         python local_crawler.py
     
     - name: 임시 파일 정리
